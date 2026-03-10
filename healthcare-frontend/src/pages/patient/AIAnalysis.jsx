@@ -1,6 +1,5 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import DashboardLayout from "../../layouts/DashboardLayout";
-import { useClaim } from "../../context/ClaimContext";
 import {
   BarChart,
   Bar,
@@ -10,182 +9,414 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from "recharts";
-
-import { useNavigate } from "react-router-dom";
+import { toast } from "react-toastify";
+import { motion, AnimatePresence } from "framer-motion";
 
 export default function AIAnalysis() {
-
-
-  
-
-    const navigate = useNavigate();
-
-    
+  const [selectedTab, setSelectedTab] = useState("chat");
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [history, setHistory] = useState([]);
-  const { updateHealthRisk } = useClaim();
+
+  const [messages, setMessages] = useState([
+    {
+      id: 1,
+      type: "bot",
+      text: "Hello! I'm your Nexus AI Claim Agent. I can help you with:\n• Understanding your medical reports\n• Analyzing claim documents\n• Answering insurance questions\n• Checking claim eligibility\n\nWhat would you like help with?",
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    },
+  ]);
+  const [inputMessage, setInputMessage] = useState("");
+  const messagesEndRef = useRef(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
   const handleAnalyze = () => {
     if (!file) return;
 
     setLoading(true);
 
-    // Simulate AI processing
     setTimeout(() => {
-        const newResult = {
+      const newResult = {
         id: Date.now(),
         fileName: file.name,
         date: new Date().toLocaleString(),
         summary:
-            "Patient hemoglobin is slightly below normal range. Mild anemia suspected. Further iron profile recommended.",
+          "Blood test analysis shows slightly elevated cholesterol levels. Hemoglobin is within normal range. Recommend regular monitoring and lifestyle modifications.",
         metrics: [
-            { name: "Hemoglobin", value: 10.5 },
-            { name: "RBC Count", value: 4.1 },
-            { name: "WBC Count", value: 7.0 },
+          { name: "Cholesterol", value: 220 },
+          { name: "Hemoglobin", value: 13.5 },
+          { name: "Blood Glucose", value: 95 },
         ],
-        risk: "Medium",
-        };
-        updateHealthRisk(newResult.risk);
-setResult(newResult);
-setHistory((prev) => [newResult, ...prev]);
+        risk: "Low",
+        recommendations: [
+          "Monitor cholesterol levels monthly",
+          "Increase physical activity",
+          "Reduce salt intake",
+        ],
+      };
+
+      setHistory((prev) => [newResult, ...prev]);
+      setResult(newResult);
+      setFile(null);
       setLoading(false);
-    }, 2000);
+      toast.success("Document analyzed successfully!");
+
+      // Add bot message
+      const botMsg = {
+        id: messages.length + 1,
+        type: "bot",
+        text: `I've analyzed your report: ${newResult.fileName}. ${newResult.summary}`,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      };
+      setMessages((prev) => [...prev, botMsg]);
+    }, 2500);
+  };
+
+  const handleSendMessage = (e) => {
+    if (e) e.preventDefault();
+    if (!inputMessage.trim()) return;
+
+    // Add user message
+    const userMsg = {
+      id: messages.length + 1,
+      type: "user",
+      text: inputMessage,
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    };
+    setMessages((prev) => [...prev, userMsg]);
+    const currentInput = inputMessage;
+    setInputMessage("");
+    setLoading(true);
+
+    // Simulate bot response
+    setTimeout(() => {
+      let botResponse = "";
+      const msg = currentInput.toLowerCase();
+
+      if (
+        msg.includes("claim") ||
+        msg.includes("insurance") ||
+        msg.includes("coverage")
+      ) {
+        botResponse =
+          "Based on your profile, you're eligible for claim reimbursement. You have ₹1,55,000 remaining coverage. Would you like me to help you submit a claim?";
+      } else if (msg.includes("document") || msg.includes("report")) {
+        botResponse =
+          "To process your claim, you'll need: • Medical prescriptions • Hospital discharge summary • Bills and receipts • Insurance documents. You can upload them in the Report Analysis tab.";
+      } else if (msg.includes("doubt") || msg.includes("question")) {
+        botResponse =
+          "I'm here to help! You can ask me about: Insurance coverage, claim process, medical reports, or any health-related questions. What would you like to know?";
+      } else {
+        botResponse =
+          "I understand your question! This information will help in processing your claim faster. Is there anything else you'd like to know?";
+      }
+
+      const botMsg = {
+        id: messages.length + 2,
+        type: "bot",
+        text: botResponse,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      };
+      setMessages((prev) => [...prev, botMsg]);
+      setLoading(false);
+    }, 1500);
   };
 
   return (
-    <DashboardLayout role="patient">
-
-        <button
-    onClick={() => navigate("/insurance/claims")}
-    >
-    Go To Insurance
-    </button>
-      <h1 className="text-2xl font-bold mb-6">AI Report Analysis</h1>
-
-      <div className="bg-white p-6 rounded-xl shadow-sm border max-w-2xl">
-
-        {/* Upload */}
-        <div className="mb-6">
-          <label className="block text-sm font-medium mb-2">
-            Upload Medical Report
-          </label>
-          <input
-            type="file"
-            onChange={(e) => setFile(e.target.files[0])}
-            className="w-full border rounded-lg px-3 py-2"
-          />
-
-          {file && (
-            <p className="mt-2 text-sm text-green-600">
-              Selected: {file.name}
-            </p>
-          )}
+    <DashboardLayout>
+      <div className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-slate-900 mb-2 flex items-center gap-3">
+            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white text-xl shadow-lg shadow-indigo-600/30">✨</div>
+            Nexus AI Agent
+          </h1>
+          <p className="text-slate-500">Your personal healthcare and insurance assistant.</p>
         </div>
-
-        {/* Analyze Button */}
-        <button
-          onClick={handleAnalyze}
-          className="bg-blue-600 text-white px-5 py-2 rounded-lg hover:bg-blue-700"
-        >
-          Analyze Report
-        </button>
-
-        {/* Loading */}
-        {loading && (
-          <p className="mt-4 text-blue-600">
-            Analyzing report using AI...
-          </p>
-        )}
-
-        {/* Result */}
-        {result && (
-          <div className="mt-8 space-y-6">
-
-            {/* Summary */}
-            <div className="bg-gray-50 p-4 rounded-lg border">
-              <h2 className="font-semibold mb-2">AI Summary</h2>
-              <p className="text-sm text-gray-700">
-                {result.summary}
-              </p>
-            </div>
-
-            {/* Metrics */}
-            <div className="bg-gray-50 p-4 rounded-lg border">
-              <h2 className="font-semibold mb-3">Extracted Metrics</h2>
-              <ul className="space-y-2">
-                {result.metrics.map((metric, index) => (
-                  <li key={index} className="flex justify-between text-sm">
-                    <span>{metric.name}</span>
-                    <span
-                      className={`font-medium ${
-                        metric.status === "Low"
-                          ? "text-red-600"
-                          : "text-green-600"
-                      }`}
-                    >
-                      {metric.value}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            {/* Chart Visualization */}
-            <div className="bg-white p-4 rounded-lg border mt-6">
-            <h2 className="font-semibold mb-4">Metric Visualization</h2>
-
-            <div style={{ width: "100%", height: 300 }}>
-                <ResponsiveContainer>
-                <BarChart data={result.metrics}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" />
-                    <YAxis />
-                    <Tooltip />
-                    <Bar dataKey="value" fill="#2563eb" radius={[6, 6, 0, 0]} />
-                </BarChart>
-                </ResponsiveContainer>
-            </div>
-            </div>
-            {/* Risk Indicator */}
-            <div className="bg-yellow-50 p-4 rounded-lg border">
-              <h2 className="font-semibold mb-2">Health Risk Level</h2>
-              <p className="text-yellow-700 font-medium">
-                {result.risk} Risk
-              </p>
-            </div>
-
-          </div>
-        )}
       </div>
 
-      {/* Analysis History */}
-{history.length > 0 && (
-  <div className="mt-10 bg-white p-6 rounded-xl shadow-sm border">
-    <h2 className="text-lg font-semibold mb-4">
-      Analysis History
-    </h2>
-
-    <div className="space-y-3">
-      {history.map((item) => (
-        <div
-          key={item.id}
-          onClick={() => setResult(item)}
-          className="p-4 border rounded-lg cursor-pointer hover:bg-gray-50 flex justify-between"
-        >
-          <div>
-            <p className="font-medium">{item.fileName}</p>
-            <p className="text-sm text-gray-500">{item.date}</p>
-          </div>
-
-          <span className="text-blue-600 text-sm font-medium">
-            View
-          </span>
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+        {/* Sidebar Navigation */}
+        <div className="lg:col-span-1 border-r border-slate-100 pr-6 space-y-2">
+          <button
+            onClick={() => setSelectedTab("chat")}
+            className={`w-full text-left px-5 py-4 rounded-2xl font-bold transition-all flex items-center gap-3 ${selectedTab === "chat"
+                ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/20"
+                : "text-slate-600 hover:bg-slate-50 border border-transparent hover:border-slate-100"
+              }`}
+          >
+            <span>💬</span> Intelligent Chat
+          </button>
+          <button
+            onClick={() => setSelectedTab("analyze")}
+            className={`w-full text-left px-5 py-4 rounded-2xl font-bold transition-all flex items-center gap-3 ${selectedTab === "analyze"
+                ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/20"
+                : "text-slate-600 hover:bg-slate-50 border border-transparent hover:border-slate-100"
+              }`}
+          >
+            <span>📊</span> Document Analysis
+          </button>
+          <button
+            onClick={() => setSelectedTab("history")}
+            className={`w-full text-left px-5 py-4 rounded-2xl font-bold transition-all flex items-center gap-3 ${selectedTab === "history"
+                ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/20"
+                : "text-slate-600 hover:bg-slate-50 border border-transparent hover:border-slate-100"
+              }`}
+          >
+            <span>📜</span> Query History
+          </button>
         </div>
-      ))}
-    </div>
-  </div>
-)}
+
+        {/* Main Content Area */}
+        <div className="lg:col-span-3">
+          <AnimatePresence mode="wait">
+            {/* Chat Agent Tab */}
+            {selectedTab === "chat" && (
+              <motion.div key="chat" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="flex flex-col h-[600px] bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden relative">
+                {/* Chat Area */}
+                <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-50/50">
+                  {messages.map((msg) => (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      key={msg.id}
+                      className={`flex ${msg.type === "user" ? "justify-end" : "justify-start"}`}
+                    >
+                      <div className={`flex items-end gap-2 max-w-[80%] ${msg.type === "user" ? "flex-row-reverse" : "flex-row"}`}>
+                        {msg.type === "bot" && (
+                          <div className="w-8 h-8 rounded-full bg-indigo-100 border-2 border-white flex items-center justify-center text-indigo-600 text-sm shadow-sm z-10">✨</div>
+                        )}
+                        <div
+                          className={`px-5 py-3.5 rounded-2xl shadow-sm ${msg.type === "user"
+                              ? "bg-indigo-600 text-white rounded-br-sm"
+                              : "bg-white text-slate-800 rounded-bl-sm border border-slate-100"
+                            }`}
+                        >
+                          <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.text}</p>
+                          <p className={`text-[10px] mt-2 font-medium ${msg.type === "user" ? "text-indigo-200 text-right" : "text-slate-400"}`}>
+                            {msg.time}
+                          </p>
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))}
+                  {loading && selectedTab === "chat" && (
+                    <div className="flex justify-start">
+                      <div className="flex items-end gap-2">
+                        <div className="w-8 h-8 rounded-full bg-indigo-100 border-2 border-white flex items-center justify-center text-indigo-600 text-sm shadow-sm z-10">✨</div>
+                        <div className="px-5 py-4 rounded-2xl rounded-bl-sm bg-white border border-slate-100 flex gap-1 items-center">
+                          <div className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce"></div>
+                          <div className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                          <div className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  <div ref={messagesEndRef} />
+                </div>
+
+                {/* Input Area */}
+                <div className="p-4 bg-white border-t border-slate-100">
+                  <form onSubmit={handleSendMessage} className="relative">
+                    <input
+                      type="text"
+                      placeholder="Ask about your claims, required documents, or medical records..."
+                      value={inputMessage}
+                      onChange={(e) => setInputMessage(e.target.value)}
+                      disabled={loading}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-full px-6 py-4 pr-16 text-sm text-slate-800 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all font-medium placeholder:text-slate-400"
+                    />
+                    <button
+                      type="submit"
+                      disabled={!inputMessage.trim() || loading}
+                      className="absolute right-2 top-2 bottom-2 aspect-square bg-indigo-600 text-white rounded-full hover:bg-indigo-700 transition flex items-center justify-center disabled:opacity-50 disabled:hover:bg-indigo-600"
+                    >
+                      <svg className="w-5 h-5 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
+                    </button>
+                  </form>
+
+                  {/* Suggested prompts underneath */}
+                  <div className="flex gap-2 mt-4 overflow-x-auto hide-scrollbar pb-2">
+                    {["What's my claim status?", "Required documents?", "Explain my coverage"].map((prompt) => (
+                      <button
+                        key={prompt}
+                        type="button"
+                        onClick={() => {
+                          setInputMessage(prompt);
+                          setTimeout(() => handleSendMessage({ preventDefault: () => { } }), 100);
+                        }}
+                        className="text-xs font-bold whitespace-nowrap px-4 py-2 bg-slate-100 text-slate-600 rounded-full hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-200 border border-transparent transition-colors"
+                      >
+                        {prompt}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            {/* Report Analysis Tab */}
+            {selectedTab === "analyze" && (
+              <motion.div key="analyze" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
+                <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
+                  <div className="border-2 border-dashed border-indigo-200 hover:border-indigo-400 transition-colors rounded-2xl p-10 text-center relative group cursor-pointer bg-slate-50 hover:bg-white overflow-hidden">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-100 rounded-full blur-3xl -mr-10 -mt-10 opacity-50"></div>
+
+                    <div className="w-16 h-16 bg-white shadow-sm border border-slate-100 rounded-2xl flex items-center justify-center text-3xl mx-auto mb-4 relative z-10 text-indigo-500 group-hover:scale-110 transition-transform">
+                      📄
+                    </div>
+                    <h3 className="font-bold text-slate-800 text-lg mb-1 relative z-10">Upload Medical Document</h3>
+                    <p className="text-slate-500 text-sm mb-6 relative z-10 max-w-sm mx-auto">Upload PDF, JPG, or PNG files of prescriptions, blood tests, or discharge summaries for AI extraction.</p>
+
+                    <input
+                      type="file"
+                      onChange={(e) => setFile(e.target.files[0])}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
+                    />
+
+                    {file && (
+                      <div className="inline-flex items-center gap-2 bg-indigo-50 border border-indigo-100 text-indigo-700 px-4 py-2 rounded-xl text-sm font-bold relative z-10">
+                        <span>📎</span> {file.name}
+                      </div>
+                    )}
+                    {!file && (
+                      <button className="bg-white text-slate-700 border border-slate-200 px-6 py-2 rounded-xl text-sm font-bold relative z-10 pointer-events-none group-hover:bg-slate-50">
+                        Browse Files
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="mt-6">
+                    <button
+                      onClick={handleAnalyze}
+                      disabled={!file || loading}
+                      className="w-full bg-indigo-600 text-white font-bold py-3.5 rounded-xl hover:bg-indigo-700 shadow-lg shadow-indigo-600/30 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      {loading ? (
+                        <><div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> Extracting Insights...</>
+                      ) : "▶ Analyze Document"}
+                    </button>
+                  </div>
+                </div>
+
+                {result && (
+                  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+                    <div className="bg-gradient-to-br from-indigo-900 to-slate-900 p-8 rounded-3xl shadow-xl text-white relative overflow-hidden">
+                      <div className="absolute top-0 right-0 w-40 h-40 bg-white/5 rounded-full blur-3xl -mr-10 -mt-10"></div>
+                      <h2 className="text-xl font-bold mb-4 flex items-center gap-2 relative z-10">
+                        <div className="w-2 h-6 bg-indigo-400 rounded-full"></div> 📋 Executive Summary
+                      </h2>
+                      <p className="text-indigo-100 leading-relaxed font-medium relative z-10 text-lg">
+                        "{result.summary}"
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {/* Recommendations */}
+                      {result.recommendations && (
+                        <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
+                          <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-500 flex items-center justify-center">✅</div>
+                            AI Recommendations
+                          </h3>
+                          <ul className="space-y-4">
+                            {result.recommendations.map((rec, idx) => (
+                              <li key={idx} className="text-sm font-medium text-slate-600 flex gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                <span className="text-emerald-500 font-bold shrink-0">→</span>
+                                <span>{rec}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {/* Metrics Chart */}
+                      {result.metrics && (
+                        <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
+                          <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-500 flex items-center justify-center">📊</div>
+                            Extracted Vital Metrics
+                          </h3>
+                          <div className="h-[250px] w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <BarChart data={result.metrics} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                                <YAxis tick={{ fontSize: 12, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                                <Tooltip
+                                  cursor={{ fill: '#f8fafc' }}
+                                  contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                />
+                                <Bar dataKey="value" fill="#4f46e5" radius={[6, 6, 0, 0]} maxBarSize={40} />
+                              </BarChart>
+                            </ResponsiveContainer>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+              </motion.div>
+            )}
+
+            {/* History Tab */}
+            {selectedTab === "history" && (
+              <motion.div key="history" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 min-h-[500px]">
+                <h2 className="text-xl font-bold text-slate-800 mb-6">Past Analyses</h2>
+                {history.length === 0 ? (
+                  <div className="text-center py-20">
+                    <div className="w-20 h-20 bg-slate-50 flex items-center justify-center rounded-full mx-auto mb-6 text-4xl shadow-inner border border-slate-100">
+                      📜
+                    </div>
+                    <p className="font-bold text-xl text-slate-800 mb-2">No History Yet</p>
+                    <p className="text-slate-500 text-sm">Upload documents in the Analysis tab to view past insights here.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {history.map((analysis) => (
+                      <div
+                        key={analysis.id}
+                        className="p-5 border border-slate-100 rounded-2xl hover:border-indigo-300 hover:shadow-md transition-all cursor-pointer bg-slate-50/50 hover:bg-white"
+                        onClick={() => {
+                          setResult(analysis);
+                          setSelectedTab("analyze");
+                        }}
+                      >
+                        <div className="flex justify-between items-start">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-xl flex items-center justify-center text-lg shadow-sm">📑</div>
+                            <div>
+                              <p className="font-bold text-slate-800">{analysis.fileName}</p>
+                              <p className="text-xs font-bold text-slate-400 mt-1">{analysis.date}</p>
+                            </div>
+                          </div>
+                          <span
+                            className={`px-3 py-1 rounded-full text-xs font-bold ${analysis.risk === "Low"
+                                ? "bg-emerald-100 text-emerald-700"
+                                : analysis.risk === "Medium"
+                                  ? "bg-amber-100 text-amber-700"
+                                  : "bg-rose-100 text-rose-700"
+                              }`}
+                          >
+                            Risk: {analysis.risk}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      </div>
     </DashboardLayout>
   );
 }
