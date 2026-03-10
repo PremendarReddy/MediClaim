@@ -7,7 +7,7 @@ import { Resend } from 'resend';
  */
 export const sendOTPEmail = async (email, otp) => {
     try {
-        if (process.env.NODE_ENV === 'development' || !process.env.RESEND_API_KEY || process.env.RESEND_API_KEY === 'your_resend_api_key_here') {
+        if (process.env.NODE_ENV === 'development' || !process.env.RESEND_API_KEY || process.env.RESEND_API_KEY === 're_ZP6xnesU_4AjxECcBzZtyMwjDSy23ecLj') {
             console.log(`[MOCK EMAIL] OTP for ${email}: ${otp}`);
             return { success: true, mock: true };
         }
@@ -49,7 +49,7 @@ export const sendOTPEmail = async (email, otp) => {
  */
 export const sendWelcomeEmail = async (email, hospitalName, tempPassword) => {
     try {
-        if (process.env.NODE_ENV === 'development' || !process.env.RESEND_API_KEY || process.env.RESEND_API_KEY === 'your_resend_api_key_here') {
+        if (process.env.NODE_ENV === 'development' || !process.env.RESEND_API_KEY || process.env.RESEND_API_KEY === 're_ZP6xnesU_4AjxECcBzZtyMwjDSy23ecLj') {
             console.log(`[MOCK EMAIL] Welcome ${email} registered by ${hospitalName}. Password: ${tempPassword}`);
             return { success: true, mock: true };
         }
