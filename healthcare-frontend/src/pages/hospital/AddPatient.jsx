@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import DashboardLayout from "../../layouts/DashboardLayout";
 import StatusBadge from "../../components/ui/StatusBadge";
 import api from "../../api/axios";
@@ -14,6 +14,21 @@ export default function AddPatient() {
   const [otpError, setOtpError] = useState("");
   const [loading, setLoading] = useState(false);
   const [newPatient, setNewPatient] = useState(null);
+  const [insuranceCompanies, setInsuranceCompanies] = useState([]);
+
+  useEffect(() => {
+    const fetchInsuranceCompanies = async () => {
+      try {
+        const res = await api.get('/hospitals/insurance-companies');
+        if (res.data.success) {
+          setInsuranceCompanies(res.data.data);
+        }
+      } catch (error) {
+        toast.error("Failed to fetch insurance providers");
+      }
+    };
+    fetchInsuranceCompanies();
+  }, []);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -24,13 +39,17 @@ export default function AddPatient() {
     gender: "",
     address: "",
     otp: "",
+    insuranceProvider: "",
+    policyNumber: "",
+    memberId: "",
+    insuranceDocument: null,
   });
 
   const handleInputChange = (e) => {
-    const { name, value } = e.target;
+    const { name, value, type, files } = e.target;
     setFormData((prev) => ({
       ...prev,
-      [name]: value,
+      [name]: type === "file" ? files[0] : value,
     }));
 
     if (touched[name]) {
@@ -58,9 +77,9 @@ export default function AddPatient() {
     setLoading(true);
 
     try {
-      const response = await api.post('/hospitals/patients/send-otp', { email: formData.email });
+      const response = await api.post('/hospitals/patients/send-otp', { email: formData.email, phone: formData.phone });
       if (response.data.success) {
-        toast.success(`Verification code sent to ${formData.email}.`);
+        toast.success(`Verification code sent to ${formData.email} and ${formData.phone}.`);
         setStep(2);
         setOtpError("");
       }
@@ -83,19 +102,40 @@ export default function AddPatient() {
     setLoading(true);
 
     try {
+      
+      let insuranceDetailsPayload = undefined;
+      
+      if (formData.insuranceProvider) {
+         const selectedProvider = insuranceCompanies.find(c => c._id === formData.insuranceProvider);
+         insuranceDetailsPayload = {
+            providerId: formData.insuranceProvider,
+            providerName: selectedProvider ? selectedProvider.name : "",
+            policyNumber: formData.policyNumber,
+            memberId: formData.memberId,
+         };
+      }
+
+      const patientDetailsPayload = {
+        phoneNumber: formData.phone,
+        dateOfBirth: formData.dateOfBirth,
+        gender: formData.gender,
+        address: formData.address,
+        aadhar: formData.aadhar,
+        ...(insuranceDetailsPayload && { insuranceDetails: insuranceDetailsPayload })
+      };
+
+      const submitData = new FormData();
+      submitData.append('name', formData.name);
+      submitData.append('email', formData.email);
+      submitData.append('otp', formData.otp);
+      submitData.append('patientDetails', JSON.stringify(patientDetailsPayload));
+
+      if (formData.insuranceDocument) {
+          submitData.append('insuranceDocument', formData.insuranceDocument);
+      }
+
       // Execute the real API call to the backend
-      const response = await api.post('/hospitals/patients', {
-        name: formData.name,
-        email: formData.email,
-        otp: formData.otp,
-        patientDetails: {
-          phoneNumber: formData.phone,
-          dateOfBirth: formData.dateOfBirth,
-          gender: formData.gender,
-          address: formData.address,
-          aadhar: formData.aadhar
-        }
-      });
+      const response = await api.post('/hospitals/patients', submitData);
 
       if (response.data.success) {
         setStatus("Approved");
@@ -296,10 +336,77 @@ export default function AddPatient() {
                 ></textarea>
               </div>
 
+              <h2 className="text-lg font-bold text-slate-800 border-b pb-2 mt-8">
+                Insurance Details <span className="text-slate-400 font-medium text-sm">(Optional)</span>
+              </h2>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                    Insurance Provider
+                  </label>
+                  <select
+                    name="insuranceProvider"
+                    value={formData.insuranceProvider}
+                    onChange={handleInputChange}
+                    className="w-full border border-slate-200 focus:ring-blue-500 focus:outline-none focus:ring-2 rounded-xl py-2.5 px-3 bg-white"
+                  >
+                    <option value="">No Insurance / Cash Patient</option>
+                    {insuranceCompanies.map(company => (
+                       <option key={company._id} value={company._id}>{company.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {formData.insuranceProvider && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                        Policy Number
+                      </label>
+                      <input
+                        type="text"
+                        name="policyNumber"
+                        value={formData.policyNumber}
+                        onChange={handleInputChange}
+                        placeholder="POL-12345678"
+                        className="w-full border border-slate-200 focus:ring-blue-500 focus:outline-none focus:ring-2 rounded-xl py-2.5 px-3"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                        Member ID
+                      </label>
+                      <input
+                        type="text"
+                        name="memberId"
+                        value={formData.memberId}
+                        onChange={handleInputChange}
+                        placeholder="MEM-87654321"
+                        className="w-full border border-slate-200 focus:ring-blue-500 focus:outline-none focus:ring-2 rounded-xl py-2.5 px-3"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                        Attach Insurance Card / Policy
+                      </label>
+                      <input
+                        type="file"
+                        name="insuranceDocument"
+                        onChange={handleInputChange}
+                        className="w-full text-sm text-slate-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 transition-all cursor-pointer border border-slate-200 rounded-xl p-1"
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
+
               <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100 flex items-start gap-3">
                 <div className="text-blue-500 text-xl">ℹ️</div>
                 <p className="text-sm text-blue-800 leading-relaxed font-medium">
-                  An OTP will be generated and dispatched securely to the patient's registered email to verify the onboarding process.
+                  An OTP will be generated and dispatched securely to the patient's registered email and mobile number to verify the onboarding process.
                 </p>
               </div>
 
@@ -333,7 +440,7 @@ export default function AddPatient() {
                 <h2 className="text-2xl font-bold text-slate-900 mb-2">Verify Authorization</h2>
                 <p className="text-slate-500 text-sm">
                   We've sent a secure one-time passcode to <br />
-                  <strong className="text-slate-800">{formData.email}</strong>
+                  <strong className="text-slate-800">{formData.email}</strong> and <strong className="text-slate-800">{formData.phone}</strong>
                 </p>
               </div>
 
@@ -449,7 +556,7 @@ export default function AddPatient() {
                   onClick={() => {
                     setStep(1);
                     setFormData({
-                      name: "", email: "", phone: "", dateOfBirth: "", aadhar: "", gender: "", address: "", otp: ""
+                      name: "", email: "", phone: "", dateOfBirth: "", aadhar: "", gender: "", address: "", otp: "", insuranceProvider: "", policyNumber: "", memberId: "", insuranceDocument: null
                     });
                     setStatus(null);
                     setNewPatient(null);

@@ -130,6 +130,19 @@ export const getAdminAnalytics = async (req, res) => {
 
         const highRiskClaims = await Claim.countDocuments({ insuranceCompanyId: companyId, aiRiskScore: 'HIGH' });
 
+        // Calculate Total Paid Out strictly from Approved/Released claims
+        const releasedClaimsList = await Claim.find({ insuranceCompanyId: companyId, status: { $in: ['Approved', 'Amount Released'] } });
+        const totalPaidOut = releasedClaimsList.reduce((acc, curr) => acc + (curr.approvedAmount || curr.totalAmount || 0), 0);
+
+        // Generate Progressive Trend Data (Mocked scale out of real claim count for UI volume over time)
+        const insuranceClaimsTrend = [
+            { month: "Jan", claims: Math.max(10, Math.floor(totalClaims * 0.1)) },
+            { month: "Feb", claims: Math.max(15, Math.floor(totalClaims * 0.2)) },
+            { month: "Mar", claims: Math.max(25, Math.floor(totalClaims * 0.3)) },
+            { month: "Apr", claims: Math.max(20, Math.floor(totalClaims * 0.15)) },
+            { month: "May", claims: totalClaims } // Current month reflects real total
+        ];
+
         res.json({
             success: true,
             data: {
@@ -137,7 +150,9 @@ export const getAdminAnalytics = async (req, res) => {
                 pendingClaims,
                 approvedClaims,
                 rejectedClaims,
-                highRiskClaims
+                highRiskClaims,
+                totalPaidOut,
+                insuranceClaimsTrend
             }
         });
 

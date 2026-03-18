@@ -30,7 +30,7 @@ export default function PatientClaimDetail() {
   const fetchClaimData = async () => {
     try {
       setLoading(true);
-      const res = await api.get(`/hospitals/claims`);
+      const res = await api.get(`/patients/claims`);
       if (res.data.success) {
         // Fallback filter since no direct /patients/claims/:id exists yet
         const myClaim = res.data.data.find(c => c._id === id);
@@ -138,8 +138,41 @@ export default function PatientClaimDetail() {
     claim.status === s || (s === 'Pending Authorization' && claim.status.includes('Pending')) || (s === 'Claim Initiated' && claim.status === 'Intiated')
   );
 
+  const isFinalized = claim.status === 'Approved' || claim.status === 'Amount Released';
+
   return (
     <DashboardLayout>
+      {/* Calculate Missing Documents locally for UI rendering */}
+      {(() => {
+        const requiredDocs = [
+            'Claim Form', 'ID Proof', 'Policy Card',
+            'Prescription', 'Discharge Summary', 'Pharmacy Bill',
+            'Investigation Report', 'NEFT Details'
+        ];
+        
+        const docAliasMap = {
+            'Aadhaar Card (Patient ID)': 'ID Proof',
+            'PAN Card (Tax ID)': 'ID Proof',
+            'Insurance Policy Copy': 'Policy Card',
+            'Diagnostic Report': 'Investigation Report',
+            'Radiology (X-Ray/MRI/CT)': 'Investigation Report',
+            'Blood Test': 'Investigation Report',
+            'X-Ray': 'Investigation Report',
+            'CT Scan': 'Investigation Report',
+            'Ultrasound': 'Investigation Report',
+            'ECG': 'Investigation Report',
+            'Hospital Bill': 'Pharmacy Bill',
+            'Doctor\'s Prescription': 'Prescription',
+            'Diagnostic Reports (Blood/Urine)': 'Investigation Report',
+            'X-Ray / MRI / CT Scans': 'Investigation Report',
+            'Pharmacy Bills': 'Pharmacy Bill'
+        };
+
+        const providedDocs = claim?.documents?.map(d => docAliasMap[d.docType] || d.docType) || [];
+        const missingDocuments = requiredDocs.filter(reqDoc => !providedDocs.includes(reqDoc));
+
+        return (
+          <>
       <div className="flex items-center gap-4 mb-8">
         <button onClick={() => navigate("/patient/claims")} className="w-10 h-10 bg-white border border-slate-200 rounded-xl flex items-center justify-center text-slate-500 hover:bg-slate-50 hover:text-slate-800 transition shadow-sm">
           ←
@@ -164,7 +197,7 @@ export default function PatientClaimDetail() {
               </div>
               <div className="text-right">
                 <p className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-1">Total Requested</p>
-                <p className="text-3xl font-black text-slate-800">₹{claim.claimAmount?.toLocaleString()}</p>
+                <p className="text-3xl font-black text-slate-800">₹{claim.totalAmount?.toLocaleString()}</p>
               </div>
             </div>
 
@@ -185,6 +218,56 @@ export default function PatientClaimDetail() {
                 <p className="text-xs font-bold text-slate-400 uppercase mb-1">Submission Date</p>
                 <p className="font-bold text-slate-800 truncate">{new Date(claim.createdAt || Date.now()).toLocaleDateString()}</p>
               </div>
+            </div>
+            <div className="mt-8 relative z-10 border-t border-slate-100 pt-8">
+              <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
+                <div className="w-2 h-6 bg-emerald-500 rounded-full"></div> Attached Documents
+              </h3>
+              
+              {claim.documents && claim.documents.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {claim.documents.map((doc, idx) => (
+                    <div key={idx} className="flex flex-col justify-between bg-white border border-slate-200 p-4 rounded-xl shadow-sm hover:border-indigo-300 transition">
+                      <div className="flex items-start gap-3 mb-4">
+                        <div className="w-10 h-10 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold shrink-0">📄</div>
+                        <div className="flex-1">
+                          <p className="font-bold text-slate-800 text-sm truncate">{doc.docType}</p>
+                          <p className="text-xs text-slate-500 mt-1 line-clamp-2">{doc.remarks || "Uploaded by Hospital"}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between border-t border-slate-50 pt-3 mt-auto">
+                        <div className="flex gap-2">
+                          {doc.verified ? (
+                            <span className="px-2 py-1 bg-emerald-50 text-emerald-700 text-[10px] font-bold rounded-md">Verified ✅</span>
+                          ) : doc.received ? (
+                            <span className="px-2 py-1 bg-amber-50 text-amber-700 text-[10px] font-bold rounded-md">Received ⏳</span>
+                          ) : (
+                            <span className="px-2 py-1 bg-slate-50 text-slate-600 text-[10px] font-bold rounded-md">Awaiting</span>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => {
+                            if (doc.fileUrl && doc.fileUrl.startsWith('mock-storage://')) {
+                              toast.info(`Simulated view of document: ${doc.docType}. (File: ${doc.fileUrl.replace('mock-storage://', '')})`);
+                            } else if (doc.fileUrl) {
+                              window.open(doc.fileUrl, '_blank', 'noreferrer');
+                            } else {
+                              toast.error('No valid file URL found.');
+                            }
+                          }}
+                          className="text-indigo-600 font-bold text-xs hover:text-indigo-800 transition px-3 py-1 bg-indigo-50 rounded-lg hover:bg-indigo-100"
+                        >
+                          View File ↗
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-6 bg-slate-50 rounded-xl border border-slate-100 border-dashed">
+                  <p className="text-sm font-bold text-slate-400">No documents attached yet.</p>
+                </div>
+              )}
             </div>
           </motion.div>
 
@@ -221,7 +304,7 @@ export default function PatientClaimDetail() {
         </div>
 
         <div className="space-y-6">
-          {claim.status.includes('Pending') || claim.status === 'Claim Initiated' ? (
+          {(claim.status === 'Pending Documents' || claim.status === 'Initiated' || claim.status === 'Pending Patient Consent') ? (
             <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="bg-gradient-to-br from-rose-50 to-orange-50 p-6 rounded-3xl shadow-sm border border-rose-100 relative overflow-hidden">
               <div className="absolute top-0 right-0 w-32 h-32 bg-rose-200/50 rounded-full blur-3xl -mr-10 -mt-10"></div>
 
@@ -233,30 +316,40 @@ export default function PatientClaimDetail() {
               </p>
 
               <ul className="space-y-3 text-sm mb-6 relative z-10 bg-white/50 p-4 rounded-2xl border border-white">
-                {['Claim Form', 'ID Proof', 'Policy Card'].map(docType => {
-                  const doc = claim.documents?.find(d => d.docType === docType);
-                  const uploaded = !!doc;
-                  const verified = doc?.verified;
-                  const received = doc?.received;
+                {requiredDocs.map(reqDoc => {
+                  const uploaded = providedDocs.includes(reqDoc);
+                  
+                  // Find the actual document to check verified/received status
+                  let verified = false;
+                  let received = false;
+                  if (uploaded) {
+                    const docObj = claim.documents?.find(d => (docAliasMap[d.docType] || d.docType) === reqDoc);
+                    if (docObj) {
+                      verified = docObj.verified;
+                      received = docObj.received;
+                    }
+                  }
 
                   return (
-                    <li key={docType} className="flex items-center justify-between font-bold text-slate-700">
+                    <li key={reqDoc} className="flex items-center justify-between font-bold text-slate-700">
                       <div className="flex items-center gap-2">
-                        <span className={verified ? "text-emerald-500" : uploaded ? "text-amber-500" : "text-rose-500"}>
-                          {verified ? "✓" : uploaded ? "⏳" : "✖"}
+                        <span className={verified ? "text-emerald-500" : uploaded ? "text-emerald-500" : "text-rose-500"}>
+                          {verified ? "✓" : uploaded ? "✓" : "✖"}
                         </span>
-                        {docType}
+                        {reqDoc}
                       </div>
-                      {uploaded && (
+                      {uploaded ? (
                         <div className="flex gap-2">
                           {verified ? (
                             <span className="text-[10px] px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-md">Verified</span>
                           ) : received ? (
-                            <span className="text-[10px] px-2 py-0.5 bg-amber-100 text-amber-700 rounded-md">Received</span>
+                            <span className="text-[10px] px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-md">Received</span>
                           ) : (
                             <span className="text-[10px] px-2 py-0.5 bg-slate-200 text-slate-600 rounded-md">Awaiting Review</span>
                           )}
                         </div>
+                      ) : (
+                        <span className="text-[10px] px-2 py-0.5 bg-rose-100 text-rose-700 rounded-md">Missing</span>
                       )}
                     </li>
                   )
@@ -265,53 +358,68 @@ export default function PatientClaimDetail() {
 
               <h3 className="font-bold text-slate-800 mb-3 relative z-10">Secure Upload Portal</h3>
 
-              <div className="mb-4 relative z-10">
-                <select
-                  value={docType}
-                  onChange={(e) => setDocType(e.target.value)}
-                  className="w-full bg-white border border-rose-200 rounded-xl py-2 px-3 text-sm font-medium focus:ring-2 focus:ring-rose-400 focus:outline-none"
-                >
-                  <option value="Claim Form">Claim Form</option>
-                  <option value="ID Proof">ID Proof</option>
-                  <option value="Policy Card">Policy Card</option>
-                  <option value="Other">Other</option>
-                </select>
-              </div>
-
-              <div className="bg-white border-2 border-dashed border-rose-200 hover:border-rose-400 transition-colors p-6 rounded-2xl text-center relative z-10 mb-4 group cursor-pointer">
-                <div className="w-12 h-12 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center text-xl mx-auto mb-3 group-hover:bg-rose-100 transition-colors">
-                  📤
+              <div className={`transition-opacity ${isFinalized ? 'opacity-50 pointer-events-none' : ''}`}>
+                <div className="mb-4 relative z-10">
+                  <select
+                    value={docType}
+                    onChange={(e) => setDocType(e.target.value)}
+                    disabled={isFinalized}
+                    className="w-full bg-white border border-rose-200 rounded-xl py-2 px-3 text-sm font-medium focus:ring-2 focus:ring-rose-400 focus:outline-none disabled:bg-slate-50 disabled:cursor-not-allowed"
+                  >
+                    <option value="Aadhaar Card (Patient ID)">Aadhaar Card (Patient ID)</option>
+                    <option value="" disabled>-- Document Category --</option>
+                    <option value="Aadhaar / Voter ID">Aadhaar / Voter ID</option>
+                    <option value="PAN Card">PAN Card</option>
+                    <option value="Insurance Policy Copy">Insurance Policy Copy</option>
+                    <option value="Hospital Admission Note">Hospital Admission Note</option>
+                    <option value="Doctor Prescription">Doctor's Prescription</option>
+                    <option value="Diagnostic Report">Diagnostic Report</option>
+                    <option value="Radiology (X-Ray/MRI/CT)">Radiology (X-Ray/MRI/CT)</option>
+                    <option value="Surgery / OT Notes">Surgery / Operation Notes</option>
+                    <option value="Discharge Summary">Discharge Summary</option>
+                    <option value="Pharmacy & Consumable Bills">Pharmacy & Consumable Bills</option>
+                    <option value="Pre-Authorization Form">Pre-Authorization Form</option>
+                    <option value="Claim Form">Claim Form (Filled)</option>
+                    <option value="Other Medical Record">Other Medical Record</option>
+                  </select>
                 </div>
-                <p className="text-sm font-bold text-slate-600 mb-1">
-                  Drag & drop files here
-                </p>
-                <p className="text-xs font-medium text-slate-400 mb-4 px-4 leading-relaxed">
-                  Or click to browse. Max 5MB per file (PDF, JPG).
-                </p>
 
-                <input
-                  type="file"
-                  onChange={(e) => setSelectedFile(e.target.files[0])}
-                  className="opacity-0 absolute inset-0 cursor-pointer"
-                />
-
-                {selectedFile && (
-                  <div className="bg-rose-50 p-2 rounded-xl text-xs font-bold text-rose-700 border border-rose-100 truncate">
-                    Selected: {selectedFile.name}
+                <div className="bg-white border-2 border-dashed border-rose-200 hover:border-rose-400 transition-colors p-6 rounded-2xl text-center relative z-10 mb-4 group cursor-pointer">
+                  <div className="w-12 h-12 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center text-xl mx-auto mb-3 group-hover:bg-rose-100 transition-colors">
+                    📤
                   </div>
-                )}
-              </div>
+                  <p className="text-sm font-bold text-slate-600 mb-1">
+                    Drag & drop files here
+                  </p>
+                  <p className="text-xs font-medium text-slate-400 mb-4 px-4 leading-relaxed">
+                    Or click to browse. Max 5MB per file (PDF, JPG).
+                  </p>
 
-              <button
-                onClick={handleDocumentSubmit}
-                disabled={!selectedFile || uploading}
-                className="w-full bg-slate-900 text-white font-bold px-5 py-3.5 rounded-xl hover:bg-slate-800 shadow-lg shadow-slate-900/20 transition disabled:opacity-50 relative z-10 mb-4"
-              >
-                {uploading ? "Uploading..." : "Upload Document"}
-              </button>
+                  <input
+                    type="file"
+                    disabled={isFinalized}
+                    onChange={(e) => setSelectedFile(e.target.files[0])}
+                    className="opacity-0 absolute inset-0 cursor-pointer disabled:cursor-not-allowed"
+                  />
+
+                  {selectedFile && (
+                    <div className="bg-rose-50 p-2 rounded-xl text-xs font-bold text-rose-700 border border-rose-100 truncate">
+                      Selected: {selectedFile.name}
+                    </div>
+                  )}
+                </div>
+
+                <button
+                  onClick={handleDocumentSubmit}
+                  disabled={!selectedFile || uploading || isFinalized}
+                  className="w-full bg-slate-900 text-white font-bold px-5 py-3.5 rounded-xl hover:bg-slate-800 shadow-lg shadow-slate-900/20 transition disabled:opacity-50 relative z-10 mb-4"
+                >
+                  {uploading ? "Uploading..." : isFinalized ? "Upload Locked" : "Upload Document"}
+                </button>
+              </div>
 
               <div className="border-t border-rose-200 pt-4 mt-2 relative z-10">
-                {(claim.status === 'Initiated' || claim.status === 'Pending Patient Consent') ? (
+                {(claim.status === 'Initiated') ? (
                   !otpSent ? (
                     <button
                       onClick={handleSendOTP}
@@ -358,6 +466,9 @@ export default function PatientClaimDetail() {
           )}
         </div>
       </div>
+          </>
+        );
+      })()}
     </DashboardLayout>
   );
 }

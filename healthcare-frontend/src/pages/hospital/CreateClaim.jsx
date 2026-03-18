@@ -97,7 +97,7 @@ export default function CreateClaim() {
         try {
             const res = await api.post(`/hospitals/patients/${formData.patientId}/send-consent-otp`);
             if (res.data.success) {
-                toast.success("Consent OTP sent to the patient.");
+                toast.success("Consent OTP sent to the patient's email and phone.");
                 setShowOTPModal(true);
             }
         } catch (error) {
@@ -161,6 +161,52 @@ export default function CreateClaim() {
         }
     };
 
+    // Extract auto-attached documents for preview
+    const vaultToClaimMap = {
+        'Aadhaar Card (Patient ID)': 'ID Proof',
+        'PAN Card (Tax ID)': 'ID Proof',
+        'Insurance Policy Copy': 'Policy Card',
+        'Diagnostic Report': 'Investigation Report',
+        'Radiology (X-Ray/MRI/CT)': 'Investigation Report',
+        'Blood Test': 'Investigation Report',
+        'X-Ray': 'Investigation Report',
+        'CT Scan': 'Investigation Report',
+        'Ultrasound': 'Investigation Report',
+        'ECG': 'Investigation Report',
+        'Hospital Bill': 'Pharmacy Bill'
+    };
+
+    let autoAttachedDocs = [];
+    if (formData.patientId) {
+        const patient = patients.find(p => p._id === formData.patientId);
+        if (patient) {
+            const patientInsuranceDocs = (patient.patientDetails?.insuranceDetails?.insuranceDocuments || []).map(doc => ({
+                docType: 'Insurance Policy Copy',
+                fileUrl: doc.fileUrl,
+                originalName: doc.docName
+            }));
+
+            const patientVault = [
+                ...(patient.patientDetails?.medicalHistory || []),
+                ...patientInsuranceDocs
+            ];
+            
+            patientVault.forEach(vaultDoc => {
+                const mappedClaimDocType = vaultToClaimMap[vaultDoc.docType];
+                if (mappedClaimDocType) {
+                    const alreadyAutoAttached = autoAttachedDocs.find(d => d.docType === mappedClaimDocType);
+                    if (!alreadyAutoAttached) {
+                        autoAttachedDocs.push({
+                            docType: mappedClaimDocType,
+                            name: vaultDoc.originalName || vaultDoc.docType,
+                            url: vaultDoc.fileUrl
+                        });
+                    }
+                }
+            });
+        }
+    }
+
     return (
         <DashboardLayout>
             <div className="flex justify-between items-center mb-8">
@@ -208,7 +254,7 @@ export default function CreateClaim() {
                                 >
                                     <option value="">-- Select Insurance Provider --</option>
                                     {insuranceCompanies.map(c => (
-                                        <option key={c._id} value={c._id}>{c.name}</option>
+                                        <option key={c._id} value={c._id}>{c.insuranceDetails?.companyName || c.name}</option>
                                     ))}
                                 </select>
                                 {insuranceCompanies.length === 0 && (
@@ -269,6 +315,27 @@ export default function CreateClaim() {
 
                     {/* Section 3: Documents Upload */}
                     <div className="bg-emerald-50/30 p-6 rounded-2xl border border-emerald-100">
+                        {autoAttachedDocs.length > 0 && (
+                            <div className="mb-6 bg-blue-50 border border-blue-200 rounded-xl p-5 shadow-sm">
+                                <h3 className="text-sm font-bold text-blue-800 mb-3 flex items-center gap-2">
+                                    <div className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs">✨</div>
+                                    Auto-Attached from Patient Vault
+                                </h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                                    {autoAttachedDocs.map((doc, idx) => (
+                                        <div key={idx} className="flex items-center gap-3 bg-white p-3 rounded-lg border border-blue-100 shadow-sm">
+                                            <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-xs font-bold">✓</div>
+                                            <div>
+                                                <p className="text-sm font-bold text-slate-800">{doc.docType}</p>
+                                                <p className="text-xs text-slate-500">Found: {doc.name}</p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                                <p className="text-xs text-blue-600 font-medium italic">These mandatory documents are already in the patient's record and will be securely linked to this claim automatically. You do not need to upload them below.</p>
+                            </div>
+                        )}
+
                         <div className="flex justify-between items-center mb-4 border-b border-emerald-200 pb-2">
                             <h2 className="text-lg font-bold text-slate-800">Hospital Documents</h2>
                             <button
@@ -294,10 +361,19 @@ export default function CreateClaim() {
                                                 onChange={(e) => handleDocumentChange(index, 'docType', e.target.value)}
                                                 className="w-full border border-slate-300 rounded-lg py-2 px-3 focus:ring-2 focus:ring-emerald-500 focus:outline-none font-medium text-slate-700"
                                             >
+                                                <option value="Aadhaar Card (Patient ID)">Aadhaar Card (Patient ID)</option>
+                                                <option value="PAN Card (Tax ID)">PAN Card (Tax ID)</option>
+                                                <option value="Insurance Policy Copy">Insurance Policy Copy</option>
+                                                <option value="Hospital Admission Note">Hospital Admission Note</option>
+                                                <option value="Doctor's Prescription">Doctor's Prescription</option>
+                                                <option value="Diagnostic Reports (Blood/Urine)">Diagnostic Reports (Blood/Urine)</option>
+                                                <option value="X-Ray / MRI / CT Scans">X-Ray / MRI / CT Scans</option>
+                                                <option value="Surgery / OT Notes">Surgery / OT Notes</option>
                                                 <option value="Discharge Summary">Discharge Summary</option>
-                                                <option value="Pharmacy Bill">Pharmacy Bill</option>
-                                                <option value="Investigation Report">Investigation Report</option>
-                                                <option value="Other">Other</option>
+                                                <option value="Pharmacy Bills">Pharmacy Bills</option>
+                                                <option value="Consumable / Equipment Bills">Consumable / Equipment Bills</option>
+                                                <option value="Pre-Authorization Form">Pre-Authorization Form</option>
+                                                <option value="Other / Miscellaneous">Other / Miscellaneous</option>
                                             </select>
                                         </div>
                                         <div className="w-full md:w-1/2">
@@ -359,7 +435,7 @@ export default function CreateClaim() {
                                     </div>
                                     <h3 className="text-xl font-bold text-slate-800 tracking-tight">Patient Consent Required</h3>
                                     <p className="text-slate-500 text-sm mt-2 font-medium">
-                                        An OTP has been sent to the patient's registered email. Please enter it below to confirm their consent and submit the claim.
+                                        An OTP has been sent to the patient's registered email and mobile number. Please enter it below to confirm their consent and submit the claim.
                                     </p>
                                 </div>
 

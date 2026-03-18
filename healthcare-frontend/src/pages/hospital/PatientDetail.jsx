@@ -14,12 +14,13 @@ export default function PatientDetail() {
   const [patientClaims, setPatientClaims] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedTab, setSelectedTab] = useState("info");
-  const [uploading, setUploading] = useState(false);
   const [reportForm, setReportForm] = useState({
     name: "",
     type: "",
     remarks: "",
+    file: null,
   });
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     fetchPatientData();
@@ -53,27 +54,74 @@ export default function PatientDetail() {
     }
   };
 
-  const handleReportUpload = (e) => {
+  const handleReportUpload = async (e) => {
     e.preventDefault();
-    if (!reportForm.name || !reportForm.type) {
-      toast.warning("Please fill required fields");
+    if (!reportForm.name || !reportForm.type || !reportForm.file) {
+      toast.warning("Please fill all required fields and select a file.");
       return;
     }
 
     setUploading(true);
-    // Mock upload delay for now
-    setTimeout(() => {
-      setReportForm({ name: "", type: "", remarks: "" });
-      setUploading(false);
-      setSelectedTab("reports");
-      toast.success(`Mock: Report "${reportForm.name}" uploaded successfully`);
-    }, 1000);
+    try {
+      // Create FormData to hold the file
+      const uploadData = new FormData();
+      uploadData.append('docType', reportForm.type);
+      uploadData.append('file', reportForm.file);
+      
+      // Axios handles multipart/form-data headers automatically when sending FormData
+      const res = await api.post(`/hospitals/patients/${patient._id}/documents`, uploadData);
+      
+      if (res.data.success) {
+        // Optimistically update patient data locally to show new doc immediately
+        const updatedPatient = { ...patient };
+        if(!updatedPatient.patientDetails) updatedPatient.patientDetails = {};
+        if(!updatedPatient.patientDetails.medicalHistory) updatedPatient.patientDetails.medicalHistory = [];
+        
+        // ensure we make a new array reference so React detects the state change
+        updatedPatient.patientDetails.medicalHistory = [
+             ...updatedPatient.patientDetails.medicalHistory,
+             res.data.data
+        ];
+        
+        setPatient(updatedPatient);
+
+        toast.success(`Report "${reportForm.name}" uploaded to secure vault`);
+        setReportForm({ name: "", type: "", remarks: "", file: null });
+        setSelectedTab("reports");
+        
+        // Reset file input element manually if needed, or let React handle it via state
+        const fileInput = document.getElementById("report-file-upload");
+        if(fileInput) fileInput.value = "";
+      }
+    } catch (error) {
+       toast.error(error.response?.data?.message || "Failed to upload document");
+    } finally {
+       setUploading(false);
+    }
   };
 
-  const handleStatusUpdate = (newStatus) => {
-    // Mocking update for now
-    setPatient({ ...patient, status: newStatus });
-    toast.success(`Mock: Patient status updated to ${newStatus}`);
+  const handleStatusUpdate = async (newStatus) => {
+    try {
+      const res = await api.put(`/hospitals/patients/${patient._id}`, { status: newStatus });
+      if (res.data.success) {
+        setPatient(res.data.data);
+        toast.success(`Patient status updated to ${newStatus}`);
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Failed to update status");
+    }
+  };
+
+  const handleCheckupUpdate = async (newDate) => {
+    try {
+      const res = await api.put(`/hospitals/patients/${patient._id}`, { nextCheckupDate: newDate });
+      if (res.data.success) {
+        setPatient(res.data.data);
+        toast.success(`Next checkup scheduled for ${newDate}`);
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Failed to update checkup date");
+    }
   };
 
   if (loading) {
@@ -148,7 +196,7 @@ export default function PatientDetail() {
           <div className="flex-1">
             <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Status</p>
             <select
-              value={patient.status || "Active"}
+              value={patient.patientDetails?.status || patient.status || "Active"}
               onChange={(e) => handleStatusUpdate(e.target.value)}
               className="w-full font-bold text-slate-800 border-none bg-slate-50 rounded-lg px-2 py-1 focus:ring-0 cursor-pointer"
             >
@@ -177,6 +225,15 @@ export default function PatientDetail() {
         <div>
           <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Registered On</p>
           <p className="font-bold text-slate-800 text-sm">{new Date(patient.createdAt).toLocaleDateString()}</p>
+        </div>
+        <div>
+          <p className="text-xs font-bold uppercase tracking-wider text-emerald-500 mb-1">Next Checkup</p>
+          <input 
+             type="date" 
+             value={patient.patientDetails?.nextCheckupDate ? new Date(patient.patientDetails.nextCheckupDate).toISOString().split('T')[0] : patient.nextCheckupDate || ""} 
+             onChange={(e) => handleCheckupUpdate(e.target.value)}
+             className="font-bold text-slate-800 text-sm bg-transparent border-none p-0 focus:ring-0 cursor-pointer"
+          />
         </div>
       </div>
 
@@ -235,7 +292,7 @@ export default function PatientDetail() {
                 </div>
               </div>
 
-              <div className="bg-blue-50/50 p-6 rounded-2xl border border-blue-100">
+              <div className="bg-blue-50/50 p-6 rounded-2xl border border-blue-100 mt-6">
                 <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><div className="w-2 h-6 bg-blue-500 rounded-full"></div> Quick Connectivity</h3>
                 <div className="flex flex-col sm:flex-row gap-4 border border-blue-200 p-2 rounded-xl bg-white w-fit shadow-sm">
                   <button
@@ -251,6 +308,42 @@ export default function PatientDetail() {
                     💼 Initiate New Claim
                   </button>
                 </div>
+              </div>
+              
+              <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 mt-6">
+                <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><div className="w-2 h-6 bg-indigo-500 rounded-full"></div> Insurance Overview</h3>
+                {patient.patientDetails?.insuranceDetails ? (
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
+                      <div>
+                        <p className="text-slate-500 font-semibold mb-1">Provider & Policy</p>
+                        <div className="bg-white p-3 rounded-xl border border-slate-200 mt-1">
+                          <p className="font-bold text-slate-800">{patient.patientDetails.insuranceDetails.providerName || "N/A"}</p>
+                          <p className="text-slate-500 font-mono text-xs mt-1">Policy: {patient.patientDetails.insuranceDetails.policyNumber || "N/A"}</p>
+                          <p className="text-slate-500 font-mono text-xs mt-0.5">Valid Upto: {patient.patientDetails.insuranceDetails.validUpto ? new Date(patient.patientDetails.insuranceDetails.validUpto).toLocaleDateString() : "N/A"}</p>
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-slate-500 font-semibold mb-1">Financials & Documents</p>
+                        <div className="bg-white p-3 rounded-xl border border-slate-200 mt-1 h-full">
+                           <p className="text-xs text-slate-500 uppercase font-bold tracking-wider">Coverage Limit</p>
+                           <p className="text-lg font-black text-indigo-600 mb-2">₹{(patient.patientDetails.insuranceDetails.coverageAmount || 0).toLocaleString()}</p>
+                           
+                           {/* Policy Document Links */}
+                           {patient.patientDetails.insuranceDetails.insuranceDocuments?.length > 0 && (
+                             <div className="pt-2 border-t border-slate-100">
+                                {patient.patientDetails.insuranceDetails.insuranceDocuments.map((doc, idx) => (
+                                  <a key={idx} href={doc.fileUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:text-blue-800 font-bold block mb-1">
+                                    📄 {doc.docName || "View Policy Document"}
+                                  </a>
+                                ))}
+                             </div>
+                           )}
+                        </div>
+                      </div>
+                   </div>
+                ) : (
+                   <p className="text-sm text-slate-500">No insurance details were provided during registration.</p>
+                )}
               </div>
             </motion.div>
           )}
@@ -296,8 +389,23 @@ export default function PatientDetail() {
                         <option value="ECG">Cardiology (ECG/ECHO)</option>
                         <option value="Discharge Summary">Discharge Protocol</option>
                         <option value="Prescription">Medical Prescription</option>
+                        <option value="Hospital Bill">Hospital Bill (Invoice)</option>
+                        <option value="Other">Other Document</option>
                       </select>
                     </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-1.5" htmlFor="report-file-upload">
+                      Select File <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      id="report-file-upload"
+                      type="file"
+                      onChange={(e) =>
+                        setReportForm({ ...reportForm, file: e.target.files[0] })
+                      }
+                      className="w-full text-sm text-slate-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 transition-all cursor-pointer border border-slate-200 rounded-lg p-1"
+                    />
                   </div>
                   <div>
                     <label className="block text-sm font-semibold text-slate-700 mb-1.5">
@@ -326,12 +434,47 @@ export default function PatientDetail() {
               </div>
 
               {/* Documents List */}
-              <div className="bg-white border rounded-2xl border-slate-200 p-8 text-center shadow-inner">
-                <div className="text-5xl mb-4">📁</div>
-                <h3 className="font-bold text-slate-800 text-lg mb-1">Secure Medical Vault</h3>
-                <p className="text-sm font-medium text-slate-500 max-w-sm mx-auto">
-                  No encrypted medical documents have been vaulted for this patient yet. Use the tool above to attach a record.
-                </p>
+              <div className="bg-white border rounded-2xl border-slate-200 p-8 shadow-inner">
+                <div className="flex justify-between items-center mb-6">
+                   <h3 className="font-bold text-slate-800 text-lg mb-1 flex items-center gap-2"><div className="w-2 h-6 bg-slate-800 rounded-full"></div> Secure Medical Vault</h3>
+                   <span className="text-sm font-semibold text-slate-500">{patient.patientDetails?.medicalHistory?.length || 0} Files Vaulted</span>
+                </div>
+                
+                {(!patient.patientDetails?.medicalHistory || patient.patientDetails.medicalHistory.length === 0) ? (
+                  <div className="text-center py-6">
+                    <div className="text-5xl mb-4">📁</div>
+                    <p className="text-sm font-medium text-slate-500 max-w-sm mx-auto">
+                      No encrypted medical documents have been vaulted for this patient yet. Use the tool above to attach a record.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                     {patient.patientDetails.medicalHistory.map((doc, idx) => (
+                        <div key={idx} className="flex justify-between items-center bg-slate-50 border border-slate-100 p-4 rounded-xl hover:bg-slate-100 transition-colors">
+                           <div className="flex items-center gap-4">
+                              <div className="w-10 h-10 bg-white shadow-sm border border-slate-200 rounded-lg flex items-center justify-center text-xl">📄</div>
+                              <div>
+                                 <p className="font-bold text-slate-700 text-sm">{doc.docType || "Report"}</p>
+                                 <a 
+                                    href={doc.fileUrl || "#"} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer" 
+                                    className="text-xs text-blue-500 hover:text-blue-700 font-mono mt-0.5 inline-block truncate max-w-[200px] sm:max-w-xs md:max-w-md"
+                                 >
+                                    View Document ↗
+                                 </a>
+                              </div>
+                           </div>
+                           <span className="text-xs font-semibold text-slate-400">
+                             {doc.uploadedDate 
+                               ? new Date(doc.uploadedDate).toLocaleDateString() 
+                               : (doc._id ? new Date(parseInt(doc._id.substring(0,8), 16) * 1000).toLocaleDateString() : new Date().toLocaleDateString())
+                             }
+                           </span>
+                        </div>
+                     ))}
+                  </div>
+                )}
               </div>
             </motion.div>
           )}
@@ -381,7 +524,7 @@ export default function PatientDetail() {
                         </div>
                         <div className="text-right flex flex-col items-end">
                           <p className="font-extrabold text-xl text-slate-800 mb-1">
-                            ₹{claim.claimAmount?.toLocaleString()}
+                            ₹{claim.totalAmount?.toLocaleString()}
                           </p>
                           <StatusBadge status={claim.status} />
                         </div>

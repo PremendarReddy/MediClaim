@@ -10,8 +10,13 @@ export default function DashboardLayout({ children, role }) {
   const [showToast, setShowToast] = useState(false);
   const toastTimeoutRef = useRef(null);
 
+  const userRole = user?.role || "patient";
+  const roleNotifications = notifications.filter(
+    (n) => n.roles?.includes("all") || n.roles?.includes(userRole) || !n.roles
+  );
+  
   const latestNotification =
-    notifications[notifications.length - 1];
+    roleNotifications[roleNotifications.length - 1];
 
   useEffect(() => {
     if (latestNotification) {

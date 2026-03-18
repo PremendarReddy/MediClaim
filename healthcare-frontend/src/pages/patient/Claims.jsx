@@ -33,11 +33,9 @@ export default function PatientClaims() {
   const fetchPatientClaims = async () => {
     try {
       setLoading(true);
-      const res = await api.get('/hospitals/claims');
+      const res = await api.get('/patients/claims');
       if (res.data.success) {
-        // Fallback filter: Find claims associated with this patient's email
-        const myClaims = res.data.data.filter(c => c.patientId?.email === user?.email);
-        setClaims(myClaims);
+        setClaims(res.data.data);
       }
     } catch (error) {
       console.error("Failed to fetch claims:", error);
@@ -97,7 +95,7 @@ export default function PatientClaims() {
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="bg-emerald-50 p-6 rounded-3xl border border-emerald-100 shadow-sm">
           <p className="text-sm font-bold text-emerald-600/80 uppercase tracking-wider mb-2">Approved</p>
           <p className="text-4xl font-bold text-emerald-600">
-            {claims.filter((c) => c.status === "Approved").length}
+            {claims.filter((c) => ["Approved", "Amount Released"].includes(c.status)).length}
           </p>
         </motion.div>
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="bg-amber-50 p-6 rounded-3xl border border-amber-100 shadow-sm">
@@ -152,7 +150,7 @@ export default function PatientClaims() {
                     </div>
 
                     <div className="flex flex-col md:items-end gap-2">
-                      <p className="text-2xl font-black text-slate-800">₹{claim.claimAmount?.toLocaleString()}</p>
+                      <p className="text-2xl font-black text-slate-800">₹{claim.totalAmount?.toLocaleString()}</p>
                       <StatusBadge status={claim.status} />
                     </div>
                   </div>

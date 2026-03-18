@@ -32,8 +32,8 @@ export default function InsuranceClaims() {
         // Augment with simulated AI risk score if missing
         const augmented = res.data.data.map(c => {
           let simulatedRisk = "Low";
-          if (c.claimAmount > 500000) simulatedRisk = "High";
-          else if (c.claimAmount > 100000) simulatedRisk = "Medium";
+          if (c.totalAmount > 500000) simulatedRisk = "High";
+          else if (c.totalAmount > 100000) simulatedRisk = "Medium";
           return { ...c, risk: c.riskScore || simulatedRisk };
         });
         setClaims(augmented);
@@ -71,7 +71,7 @@ export default function InsuranceClaims() {
     }
 
     filtered.sort((a, b) =>
-      sortOrder === "asc" ? a.claimAmount - b.claimAmount : b.claimAmount - a.claimAmount
+      sortOrder === "asc" ? a.totalAmount - b.totalAmount : b.totalAmount - a.totalAmount
     );
 
     return filtered;
@@ -198,7 +198,7 @@ export default function InsuranceClaims() {
                           <p className="text-xs font-bold text-slate-500 mt-1">{claim.hospitalId?.name || "Connected Hospital"}</p>
                         </td>
                         <td className="px-6 py-4 text-right">
-                          <p className="text-lg font-black text-slate-800">₹{claim.claimAmount?.toLocaleString()}</p>
+                          <p className="text-lg font-black text-slate-800">₹{claim.totalAmount?.toLocaleString()}</p>
                         </td>
                         <td className="px-6 py-4 text-center">
                           <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold border ${claim.risk === 'High' ? 'bg-rose-50 border-rose-200 text-rose-700 shadow-[0_0_10px_rgba(244,63,94,0.3)]' :

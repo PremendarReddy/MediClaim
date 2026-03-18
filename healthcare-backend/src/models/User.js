@@ -41,7 +41,16 @@ const userSchema = new mongoose.Schema(
             bloodGroup: String,
             address: String,
             phoneNumber: String,
+            aadhar: String,
             emergencyContact: String,
+            status: {
+                type: String,
+                enum: ['Pending', 'Active', 'Discharged'],
+                default: 'Active'
+            },
+            nextCheckupDate: {
+                type: Date
+            },
             // Link to the hospital that created this patient profile
             registeredByHospital: {
                 type: mongoose.Schema.Types.ObjectId,
@@ -56,8 +65,19 @@ const userSchema = new mongoose.Schema(
                 policyNumber: String,
                 validUpto: Date,
                 coverageAmount: Number,
-                balanceAmount: Number
-            }
+                balanceAmount: Number,
+                memberId: String,
+                insuranceDocuments: [{
+                    docName: String,
+                    fileUrl: String,
+                    uploadedDate: { type: Date, default: Date.now }
+                }]
+            },
+            medicalHistory: [{
+                docType: String,
+                fileUrl: String,
+                uploadedDate: { type: Date, default: Date.now }
+            }]
         },
         // Insurance Company Specific
         insuranceDetails: {
@@ -78,9 +98,9 @@ userSchema.methods.matchPassword = async function (enteredPassword) {
 };
 
 // Encrypt password using bcrypt
-userSchema.pre('save', async function (next) {
+userSchema.pre('save', async function () {
     if (!this.isModified('password')) {
-        next();
+        return;
     }
     const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);

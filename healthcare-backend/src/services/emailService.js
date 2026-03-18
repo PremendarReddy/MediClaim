@@ -1,4 +1,18 @@
-import { Resend } from 'resend';
+import nodemailer from 'nodemailer';
+
+// Create a reusable transporter using SMTP transporter
+// For production, configure these in .env
+const createTransporter = () => {
+    return nodemailer.createTransport({
+        host: process.env.SMTP_HOST || 'smtp.gmail.com', // fallback to gmail for dev
+        port: process.env.SMTP_PORT || 587,
+        secure: process.env.SMTP_SECURE === 'true', // true for 465, false for other ports
+        auth: {
+            user: process.env.SMTP_USER,
+            pass: process.env.SMTP_PASS,
+        },
+    });
+};
 
 /**
  * Send an OTP Email
@@ -7,15 +21,16 @@ import { Resend } from 'resend';
  */
 export const sendOTPEmail = async (email, otp) => {
     try {
-        if (process.env.NODE_ENV === 'development' || !process.env.RESEND_API_KEY || process.env.RESEND_API_KEY === 're_ZP6xnesU_4AjxECcBzZtyMwjDSy23ecLj') {
+        if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
             console.log(`[MOCK EMAIL] OTP for ${email}: ${otp}`);
             return { success: true, mock: true };
         }
 
-        const resend = new Resend(process.env.RESEND_API_KEY);
-        const { data, error } = await resend.emails.send({
-            from: 'MediClaim Support <onboarding@resend.dev>', // Default testing domain provided by Resend
-            to: [email],
+        const transporter = createTransporter();
+
+        const info = await transporter.sendMail({
+            from: `"MediClaim Support" <${process.env.SMTP_USER}>`, 
+            to: email,
             subject: 'Your MediClaim Verification Code',
             html: `
                 <div style="font-family: sans-serif; padding: 20px; text-align: center; background-color: #f8fafc; border-radius: 12px;">
@@ -29,14 +44,9 @@ export const sendOTPEmail = async (email, otp) => {
             `,
         });
 
-        if (error) {
-            console.error('Resend API Error:', error);
-            return { success: false, error };
-        }
-
-        return { success: true, data };
+        return { success: true, messageId: info.messageId };
     } catch (err) {
-        console.error('Failed to send OTP email:', err);
+        console.error('Failed to send OTP email via Nodemailer:', err);
         return { success: false, error: err.message };
     }
 };
@@ -49,15 +59,16 @@ export const sendOTPEmail = async (email, otp) => {
  */
 export const sendWelcomeEmail = async (email, hospitalName, tempPassword) => {
     try {
-        if (process.env.NODE_ENV === 'development' || !process.env.RESEND_API_KEY || process.env.RESEND_API_KEY === 're_ZP6xnesU_4AjxECcBzZtyMwjDSy23ecLj') {
+        if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
             console.log(`[MOCK EMAIL] Welcome ${email} registered by ${hospitalName}. Password: ${tempPassword}`);
             return { success: true, mock: true };
         }
 
-        const resend = new Resend(process.env.RESEND_API_KEY);
-        const { data, error } = await resend.emails.send({
-            from: 'MediClaim Support <onboarding@resend.dev>',
-            to: [email],
+        const transporter = createTransporter();
+
+        const info = await transporter.sendMail({
+            from: `"MediClaim Support" <${process.env.SMTP_USER}>`,
+            to: email,
             subject: 'Welcome to MediClaim - Your Account Details',
             html: `
                 <div style="font-family: sans-serif; padding: 20px; background-color: #f8fafc; border-radius: 12px;">
@@ -80,14 +91,9 @@ export const sendWelcomeEmail = async (email, hospitalName, tempPassword) => {
             `,
         });
 
-        if (error) {
-            console.error('Resend API Error:', error);
-            return { success: false, error };
-        }
-
-        return { success: true, data };
+        return { success: true, messageId: info.messageId };
     } catch (err) {
-        console.error('Failed to send Welcome email:', err);
+        console.error('Failed to send Welcome email via Nodemailer:', err);
         return { success: false, error: err.message };
     }
 };

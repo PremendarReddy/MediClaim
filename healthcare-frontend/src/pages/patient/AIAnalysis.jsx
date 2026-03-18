@@ -11,13 +11,17 @@ import {
 } from "recharts";
 import { toast } from "react-toastify";
 import { motion, AnimatePresence } from "framer-motion";
+import { getMedicalInsights, generalChat } from "../../services/agentService";
+import axios from "axios";
 
 export default function AIAnalysis() {
   const [selectedTab, setSelectedTab] = useState("chat");
+  const [chatMode, setChatMode] = useState("policy");
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [history, setHistory] = useState([]);
+  const [claimsData, setClaimsData] = useState([]);
 
   const [messages, setMessages] = useState([
     {
@@ -38,96 +42,129 @@ export default function AIAnalysis() {
     scrollToBottom();
   }, [messages]);
 
-  const handleAnalyze = () => {
+  useEffect(() => {
+    const fetchClaims = async () => {
+      try {
+        const res = await axios.get('http://localhost:5000/api/patients/claims', { withCredentials: true });
+        if (res.data.success) {
+          setClaimsData(res.data.data);
+        }
+      } catch (err) {
+        console.error("Failed to fetch claims for AI context", err);
+      }
+    };
+    fetchClaims();
+  }, []);
+
+  const handleAnalyze = async () => {
     if (!file) return;
 
     setLoading(true);
 
-    setTimeout(() => {
-      const newResult = {
-        id: Date.now(),
-        fileName: file.name,
-        date: new Date().toLocaleString(),
-        summary:
-          "Blood test analysis shows slightly elevated cholesterol levels. Hemoglobin is within normal range. Recommend regular monitoring and lifestyle modifications.",
-        metrics: [
-          { name: "Cholesterol", value: 220 },
-          { name: "Hemoglobin", value: 13.5 },
-          { name: "Blood Glucose", value: 95 },
-        ],
-        risk: "Low",
-        recommendations: [
-          "Monitor cholesterol levels monthly",
-          "Increase physical activity",
-          "Reduce salt intake",
-        ],
-      };
+    try {
+      // Simulate reading the file text by just passing the file name for the NLP mock
+      const simulatedFileContentText = `Patient uploaded a document named ${file.name}. It contains test results for glucose and blood pressure.`;
+      
+      const agentResponse = await getMedicalInsights(simulatedFileContentText);
 
-      setHistory((prev) => [newResult, ...prev]);
-      setResult(newResult);
-      setFile(null);
+      if (agentResponse.success) {
+        const { diagnosis, riskFactor, aiSummary, extractedMetrics } = agentResponse.data;
+
+        const newResult = {
+          id: Date.now(),
+          fileName: file.name,
+          date: new Date().toLocaleString(),
+          summary: aiSummary,
+          metrics: extractedMetrics.keywordsFound.map(kw => ({
+            name: kw.charAt(0).toUpperCase() + kw.slice(1),
+            value: Math.floor(Math.random() * 100) + 50 // Simulation value for chart
+          })),
+          risk: riskFactor,
+          recommendations: [
+            `Diagnosis classified as: ${diagnosis}`,
+            "Please consult your primary physician regarding these findings.",
+            "Upload further historical reports for a deeper trend analysis."
+          ],
+        };
+
+        setHistory((prev) => [newResult, ...prev]);
+        setResult(newResult);
+        setFile(null);
+        toast.success("Document analyzed successfully!");
+
+        // Add bot message
+        const botMsg = {
+          id: messages.length + 1,
+          type: "bot",
+          text: `I've analyzed your report: ${newResult.fileName}. ${newResult.summary}`,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        };
+        setMessages((prev) => [...prev, botMsg]);
+      } else {
+        toast.error("AI Analysis failed.");
+      }
+    } catch (error) {
+       console.error("Agent 3 Error", error);
+       toast.error("Failed to analyze document.");
+    } finally {
       setLoading(false);
-      toast.success("Document analyzed successfully!");
-
-      // Add bot message
-      const botMsg = {
-        id: messages.length + 1,
-        type: "bot",
-        text: `I've analyzed your report: ${newResult.fileName}. ${newResult.summary}`,
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      };
-      setMessages((prev) => [...prev, botMsg]);
-    }, 2500);
+    }
   };
 
-  const handleSendMessage = (e) => {
+  const handleSendMessage = async (e) => {
     if (e) e.preventDefault();
     if (!inputMessage.trim()) return;
 
     // Add user message
+    const currentInput = inputMessage;
     const userMsg = {
-      id: messages.length + 1,
+      id: Date.now(),
       type: "user",
-      text: inputMessage,
+      text: currentInput,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
+    
     setMessages((prev) => [...prev, userMsg]);
-    const currentInput = inputMessage;
     setInputMessage("");
     setLoading(true);
 
-    // Simulate bot response
-    setTimeout(() => {
-      let botResponse = "";
-      const msg = currentInput.toLowerCase();
-
-      if (
-        msg.includes("claim") ||
-        msg.includes("insurance") ||
-        msg.includes("coverage")
-      ) {
-        botResponse =
-          "Based on your profile, you're eligible for claim reimbursement. You have ₹1,55,000 remaining coverage. Would you like me to help you submit a claim?";
-      } else if (msg.includes("document") || msg.includes("report")) {
-        botResponse =
-          "To process your claim, you'll need: • Medical prescriptions • Hospital discharge summary • Bills and receipts • Insurance documents. You can upload them in the Report Analysis tab.";
-      } else if (msg.includes("doubt") || msg.includes("question")) {
-        botResponse =
-          "I'm here to help! You can ask me about: Insurance coverage, claim process, medical reports, or any health-related questions. What would you like to know?";
-      } else {
-        botResponse =
-          "I understand your question! This information will help in processing your claim faster. Is there anything else you'd like to know?";
+    try {
+      // Determine the context data payload based on the selected mode
+      let contextPayload = null;
+      if (chatMode === 'policy') {
+         contextPayload = "This policy covers maternity, standard hospitalization up to limit $500,000, and fully excludes dental.";
+      } else if (chatMode === 'claims') {
+         contextPayload = JSON.stringify(claimsData);
       }
+      
+      const agentResponse = await generalChat(chatMode, currentInput, contextPayload);
+      
+      if (agentResponse.success) {
+        let botText = typeof agentResponse.data === 'string' 
+           ? agentResponse.data 
+           : agentResponse.data.queryAnswer || "I've processed your query.";
 
-      const botMsg = {
-        id: messages.length + 2,
-        type: "bot",
-        text: botResponse,
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      };
-      setMessages((prev) => [...prev, botMsg]);
-      setLoading(false);
-    }, 1500);
+        // Add Bot message
+        const botMsg = {
+          id: Date.now() + 1,
+          type: "bot",
+          text: botText,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        };
+        setMessages((prev) => [...prev, botMsg]);
+      }
+    } catch (error) {
+       console.error("Agent 5 Error", error);
+       const errorMsg = {
+          id: Date.now() + 1,
+          type: "bot",
+          text: "I'm sorry, I'm having trouble connecting to the insurance knowledge base right now.",
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+       };
+       setMessages((prev) => [...prev, errorMsg]);
+    } finally {
+       setLoading(false);
+    }
   };
 
   return (
@@ -180,6 +217,25 @@ export default function AIAnalysis() {
             {/* Chat Agent Tab */}
             {selectedTab === "chat" && (
               <motion.div key="chat" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="flex flex-col h-[600px] bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden relative">
+                
+                {/* Mode Selector Header */}
+                <div className="bg-slate-50 border-b border-slate-100 p-3 flex justify-center overflow-x-auto hide-scrollbar">
+                  <div className="bg-white p-1 rounded-xl shadow-sm border border-slate-100 flex inline-flex text-xs font-bold min-w-max">
+                     <button onClick={() => setChatMode('claims')} className={`px-4 py-2 rounded-lg transition-all flex items-center gap-2 ${chatMode === 'claims' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>
+                        <span>📋</span> Claims Assistance
+                     </button>
+                     <button onClick={() => setChatMode('policy')} className={`px-4 py-2 rounded-lg transition-all flex items-center gap-2 ${chatMode === 'policy' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>
+                        <span>🛡️</span> Policy Details
+                     </button>
+                     <button onClick={() => setChatMode('document')} className={`px-4 py-2 rounded-lg transition-all flex items-center gap-2 ${chatMode === 'document' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>
+                        <span>📄</span> Document Analysis
+                     </button>
+                     <button onClick={() => setChatMode('medical')} className={`px-4 py-2 rounded-lg transition-all flex items-center gap-2 ${chatMode === 'medical' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>
+                        <span>🩺</span> Medical Help
+                     </button>
+                  </div>
+                </div>
+
                 {/* Chat Area */}
                 <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-50/50">
                   {messages.map((msg) => (
@@ -224,10 +280,10 @@ export default function AIAnalysis() {
 
                 {/* Input Area */}
                 <div className="p-4 bg-white border-t border-slate-100">
-                  <form onSubmit={handleSendMessage} className="relative">
+                  <form onSubmit={handleSendMessage} className="relative mt-2">
                     <input
                       type="text"
-                      placeholder="Ask about your claims, required documents, or medical records..."
+                      placeholder={chatMode === 'claims' ? "Ask about your claim status or required documents..." : chatMode === 'medical' ? "Describe your symptoms or medication..." : chatMode === 'document' ? "Ask about your uploaded records..." : "Ask what's covered under your policy..."}
                       value={inputMessage}
                       onChange={(e) => setInputMessage(e.target.value)}
                       disabled={loading}
@@ -236,7 +292,7 @@ export default function AIAnalysis() {
                     <button
                       type="submit"
                       disabled={!inputMessage.trim() || loading}
-                      className="absolute right-2 top-2 bottom-2 aspect-square bg-indigo-600 text-white rounded-full hover:bg-indigo-700 transition flex items-center justify-center disabled:opacity-50 disabled:hover:bg-indigo-600"
+                      className="absolute right-2 top-2 bottom-2 aspect-square bg-indigo-600 text-white rounded-full hover:bg-indigo-700 transition flex items-center justify-center disabled:opacity-50 disabled:hover:bg-indigo-600 shadow-md"
                     >
                       <svg className="w-5 h-5 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
                     </button>

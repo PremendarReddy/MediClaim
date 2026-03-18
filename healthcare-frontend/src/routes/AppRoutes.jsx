@@ -11,6 +11,7 @@ const PatientClaimDetail = lazy(() => import("../pages/patient/ClaimDetail"));
 const InsuranceDashboard = lazy(() => import("../pages/insurance/Dashboard"));
 const InsuranceClaims = lazy(() => import("../pages/insurance/Claims"));
 const InsuranceClaimDetail = lazy(() => import("../pages/insurance/ClaimDetail"));
+const InsuranceAnalytics = lazy(() => import("../pages/insurance/Analytics"));
 const Home = lazy(() => import("../pages/public/Home"));
 const AddPatient = lazy(() => import("../pages/hospital/AddPatient"));
 const PatientInsurance = lazy(() => import("../pages/patient/Insurance"));
@@ -21,6 +22,7 @@ const PatientReports = lazy(() => import("../pages/patient/PatientReports"));
 const Login = lazy(() => import("../pages/auth/Login"));
 const Register = lazy(() => import("../pages/auth/Register"));
 const Tickets = lazy(() => import("../pages/shared/Tickets"));
+const Settings = lazy(() => import("../pages/shared/Settings"));
 const HospitalClaims = lazy(() => import("../pages/hospital/HospitalClaims"));
 const DoctorSlots = lazy(() => import("../pages/hospital/DoctorSlots"));
 const CreateClaim = lazy(() => import("../pages/hospital/CreateClaim"));
@@ -72,7 +74,13 @@ export default function AppRoutes() {
             <Route path="/insurance/profile" element={<InsuranceProfile />} />
             <Route path="/insurance/claims" element={<InsuranceClaims />} />
             <Route path="/insurance/claims/:id" element={<InsuranceClaimDetail />} />
+            <Route path="/insurance/analytics" element={<InsuranceAnalytics />} />
             <Route path="/insurance/tickets" element={<Tickets role="insurance" />} />
+          </Route>
+
+          {/* Shared Authenticated Routes */}
+          <Route element={<ProtectedRoute allowedRoles={['hospital', 'patient', 'insurance', 'admin']} />}>
+            <Route path="/settings" element={<Settings />} />
           </Route>
         </Routes>
       </Suspense>

@@ -24,13 +24,44 @@ export default function PatientReports() {
   const fetchPatientProfile = async () => {
     try {
       setLoading(true);
-      const res = await api.get('/hospitals/patients');
+      const res = await api.get('/auth/profile');
       if (res.data.success) {
-        const me = res.data.data.find(p => p.email === user?.email);
-        if (me) setPatientData(me);
+        const medicalHistory = res.data.data?.patientDetails?.medicalHistory || [];
+        
+        // Build unified Reports array from the medical vault
+        const vaultedDocs = medicalHistory.map(doc => ({
+           ...doc,
+           id: doc._id,
+           type: doc.docType || 'General',
+           name: doc.docName || doc.docType || 'Document',
+           date: doc.uploadedDate || new Date(),
+           fileUrl: doc.fileUrl,
+           status: 'Verified' // Since it comes from the hospital
+        }));
+        
+        // Try to optionally fetch claim docs if available
+        let claimDocs = [];
+        try {
+           const claimsRes = await api.get('/patients/claims');
+           if (claimsRes.data.success) {
+               claimDocs = claimsRes.data.data.flatMap(claim => 
+                  (claim.documents || []).map(doc => ({
+                     ...doc,
+                     id: doc._id,
+                     type: doc.docType || 'General',
+                     name: doc.docType || 'Claim Document', 
+                     date: claim.createdAt,
+                     doctorName: claim.hospitalId?.name,
+                     status: doc.verified ? 'Verified' : (doc.received ? 'Received' : 'Uploaded')
+                  }))
+               );
+           }
+        } catch(e) { }
+
+        setPatientData({ reports: [...vaultedDocs, ...claimDocs] });
       }
     } catch (error) {
-      console.error("Failed to load patient profile", error);
+      console.error("Failed to load patient claims for reports", error);
       toast.error("Could not load your medical reports");
     } finally {
       setLoading(false);
@@ -45,6 +76,8 @@ export default function PatientReports() {
     "ECG",
     "Discharge Summary",
     "Prescription",
+    "Hospital Bill",
+    "Other"
   ];
 
   const hospitalReports = patientData?.reports || [];
@@ -61,7 +94,7 @@ export default function PatientReports() {
       const simulatedText = `${report.name || report.title}. ${report.remarks || ''}`;
       const res = await getMedicalInsights(simulatedText);
       if (res.success) {
-        setAiInsight(res.data.insight);
+        setAiInsight(res.data);
         toast.success("AI Analysis Complete!");
       } else {
         toast.error("AI Analysis failed.");
@@ -161,11 +194,11 @@ export default function PatientReports() {
                                 report.type === "Prescription" ? "💊" : "📑"}
                           </div>
                         </div>
-                        <span
-                          className={`px-3 py-1 rounded-full text-xs font-bold tracking-wide ${report.status === "Normal"
+                          <span
+                          className={`px-3 py-1 rounded-full text-xs font-bold tracking-wide ${report.status === "Verified"
                             ? "bg-emerald-100 text-emerald-700"
-                            : report.status === "Abnormal"
-                              ? "bg-rose-100 text-rose-700"
+                            : report.status === "Received"
+                              ? "bg-amber-100 text-amber-700"
                               : "bg-indigo-100 text-indigo-700"
                             }`}
                         >
@@ -265,8 +298,19 @@ export default function PatientReports() {
               </div>
 
               <div className="space-y-3 pt-2">
-                <button className="w-full bg-indigo-600 text-white font-bold py-3.5 rounded-xl hover:bg-indigo-700 shadow-lg shadow-indigo-600/30 transition flex items-center justify-center gap-2">
-                  <span>📥</span> Download PDF Securely
+                <button 
+                  onClick={() => {
+                     if (selectedReport.fileUrl && selectedReport.fileUrl.startsWith('mock-storage://')) {
+                       toast.info(`Simulated view: ${selectedReport.fileUrl.replace('mock-storage://', '')}`);
+                     } else if (selectedReport.fileUrl) {
+                       window.open(selectedReport.fileUrl, '_blank', 'noreferrer');
+                     } else {
+                       toast.error('No valid file URL found.');
+                     }
+                  }}
+                  className="w-full bg-indigo-600 text-white font-bold py-3.5 rounded-xl hover:bg-indigo-700 shadow-lg shadow-indigo-600/30 transition flex items-center justify-center gap-2"
+                >
+                  <span>📥</span> View & Download Securely
                 </button>
                 <div className="grid grid-cols-2 gap-3">
                   <button className="w-full bg-white/10 text-white font-bold py-3.5 rounded-xl hover:bg-white/20 border border-white/10 transition flex items-center justify-center gap-2">
@@ -302,14 +346,36 @@ export default function PatientReports() {
                 </div>
               ) : (
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-900/30 dark:to-purple-900/30 p-5 rounded-2xl border border-indigo-200 dark:border-indigo-800/50 mt-6 shadow-inner relative">
-                  <div className="flex items-start gap-3 relative z-10">
-                    <div className="w-8 h-8 rounded-full bg-indigo-500 shrink-0 flex items-center justify-center text-white shadow-md">✨</div>
-                    <div>
-                      <h4 className="font-bold text-indigo-900 dark:text-indigo-100 text-sm mb-1">AI Medical Insight</h4>
-                      <p className="text-slate-700 dark:text-slate-300 text-sm leading-relaxed font-medium">
-                        {aiInsight}
-                      </p>
+                  <div className="flex justify-between items-start mb-4 relative z-10">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-indigo-600 shrink-0 flex items-center justify-center text-white shadow-md">🧠</div>
+                      <div>
+                        <h4 className="font-bold text-indigo-900 dark:text-indigo-100 text-sm">Medical Consensus</h4>
+                        <p className="text-xs font-bold text-indigo-500 uppercase tracking-widest">{aiInsight.diagnosis || "General Evaluation"}</p>
+                      </div>
                     </div>
+                    <span className={`px-3 py-1 text-xs font-bold rounded-full ${aiInsight.riskFactor === 'HIGH' ? 'bg-rose-100 text-rose-700' : aiInsight.riskFactor === 'MEDIUM' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                      Risk: {aiInsight.riskFactor || 'LOW'}
+                    </span>
+                  </div>
+                  
+                  <div className="relative z-10 space-y-4">
+                    <p className="text-slate-700 dark:text-slate-300 text-sm leading-relaxed font-medium bg-white/50 dark:bg-black/20 p-4 rounded-xl border border-indigo-100 dark:border-white/10">
+                      {aiInsight.aiSummary || aiInsight.insight || "Analysis complete."}
+                    </p>
+
+                    {aiInsight.extractedMetrics?.keywordsFound?.length > 0 && (
+                      <div>
+                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Detected Indicators</p>
+                        <div className="flex flex-wrap gap-2">
+                           {aiInsight.extractedMetrics.keywordsFound.map((kw, i) => (
+                              <span key={i} className="bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 text-xs font-bold px-3 py-1.5 rounded-lg border border-indigo-200 dark:border-indigo-700/50">
+                                {kw}
+                              </span>
+                           ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </motion.div>
               )}

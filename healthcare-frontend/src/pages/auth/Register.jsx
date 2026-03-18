@@ -19,6 +19,11 @@ export default function Register() {
     hospitalName: "",
     insuranceCompany: "",
     licenseNumber: "",
+    address: "",
+    bankAccountName: "",
+    bankAccountNumber: "",
+    ifscCode: "",
+    bankName: "",
   });
 
   const [errors, setErrors] = useState({});
@@ -73,8 +78,14 @@ export default function Register() {
     if (role === "hospital") {
       payload.hospitalDetails = {
         registrationNumber: formData.licenseNumber,
-        address: "Pending Address",
+        address: formData.address || "Pending Address",
         contactPerson: formData.name,
+        bankDetails: {
+          accountName: formData.bankAccountName,
+          accountNumber: formData.bankAccountNumber,
+          ifscCode: formData.ifscCode,
+          bankName: formData.bankName,
+        }
       };
     } else if (role === "insurance") {
       payload.insuranceDetails = {
@@ -285,6 +296,68 @@ export default function Register() {
                       />
                     </div>
                   </div>
+
+                  {role === "hospital" && (
+                    <>
+                      <div className="md:col-span-2">
+                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">Hospital Address</label>
+                        <textarea
+                          name="address"
+                          value={formData.address}
+                          onChange={handleChange}
+                          placeholder="Street Address, City, State ZIP"
+                          rows="2"
+                          className="block w-full px-3 py-2.5 border border-slate-200 rounded-xl leading-5 bg-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                        ></textarea>
+                      </div>
+                      
+                      <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-slate-100 pt-4 mt-2">
+                        <div className="sm:col-span-2">
+                          <h4 className="text-sm font-bold text-slate-800">Bank Details</h4>
+                        </div>
+                        <div>
+                          <input
+                            type="text"
+                            name="bankAccountName"
+                            value={formData.bankAccountName}
+                            onChange={handleChange}
+                            placeholder="Account Holder Name"
+                            className="block w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500"
+                          />
+                        </div>
+                        <div>
+                          <input
+                            type="text"
+                            name="bankAccountNumber"
+                            value={formData.bankAccountNumber}
+                            onChange={handleChange}
+                            placeholder="Account Number"
+                            className="block w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500"
+                          />
+                        </div>
+                        <div>
+                          <input
+                            type="text"
+                            name="bankName"
+                            value={formData.bankName}
+                            onChange={handleChange}
+                            placeholder="Bank Name (e.g. HDFC Bank)"
+                            className="block w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500"
+                          />
+                        </div>
+                        <div>
+                          <input
+                            type="text"
+                            name="ifscCode"
+                            value={formData.ifscCode}
+                            onChange={handleChange}
+                            placeholder="IFSC Code"
+                            className="block w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500"
+                          />
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </motion.div>
               </AnimatePresence>
             </div>

@@ -35,9 +35,9 @@ export default function InsuranceClaimDetail() {
     setAnalyzingRisk(true);
     try {
       // Pass simulated age and past claims count for the ML demo
-      const res = await runFraudDetection(45, claim.claimAmount, 2);
+      const res = await runFraudDetection(claim._id, 45, claim.totalAmount, 2);
       if (res.success) {
-        setFraudAnalysis(res.data.analysis);
+        setFraudAnalysis(res.data);
       }
     } catch (error) {
       console.error("AI Fraud Check Failed", error);
@@ -71,7 +71,8 @@ export default function InsuranceClaimDetail() {
       setUpdating(true);
       const res = await api.put(`/admin/claims/${id}/status`, {
         status: newStatus,
-        comment: newStatus === 'Rejected' ? rejectReason : `Status updated to ${newStatus}`
+        comment: newStatus === 'Rejected' ? rejectReason : `Status updated to ${newStatus}`,
+        approvedAmount: newStatus === 'Approved' ? claim.totalAmount : undefined
       });
       if (res.data.success) {
         setClaim(res.data.data);
@@ -123,7 +124,7 @@ export default function InsuranceClaimDetail() {
   }
 
   // Simulated AI Risk Score if backend is missing
-  const simulatedRisk = claim.riskScore || (claim.claimAmount > 500000 ? "High" : claim.claimAmount > 100000 ? "Medium" : "Low");
+  const simulatedRisk = claim.riskScore || (claim.totalAmount > 500000 ? "High" : claim.totalAmount > 100000 ? "Medium" : "Low");
 
   // Simulated timeline since backend only provides createdAt and status right now.
   const timeline = [
@@ -173,7 +174,7 @@ export default function InsuranceClaimDetail() {
             </div>
             <div>
               <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Requested Amount</p>
-              <p className="text-3xl font-black text-indigo-600">₹{claim.claimAmount?.toLocaleString()}</p>
+              <p className="text-3xl font-black text-indigo-600">₹{claim.totalAmount?.toLocaleString()}</p>
             </div>
           </div>
         </motion.div>
@@ -195,23 +196,23 @@ export default function InsuranceClaimDetail() {
             <>
               <div className="flex items-center gap-4 mb-4 relative z-10">
                 <div className="w-16 h-16 rounded-2xl bg-white/10 border border-white/20 flex items-center justify-center text-3xl font-bold shadow-inner fallback-blur-md">
-                  {fraudAnalysis.riskLevel === "High" ? "🚨" : fraudAnalysis.riskLevel === "Medium" ? "⚠️" : "✅"}
+                  {fraudAnalysis.riskLevel === "HIGH" ? "🚨" : fraudAnalysis.riskLevel === "MEDIUM" ? "⚠️" : "✅"}
                 </div>
                 <div>
                   <p className="font-black text-2xl tracking-tight leading-none mb-1">{fraudAnalysis.riskLevel} Risk</p>
-                  <p className="text-indigo-200/80 text-xs font-bold uppercase tracking-wider">Confidence: {(fraudAnalysis.confidence * 100).toFixed(0)}%</p>
+                  <p className="text-indigo-200/80 text-xs font-bold uppercase tracking-wider">Score: {fraudAnalysis.riskScoreMetric || 0}/100</p>
                 </div>
               </div>
 
-              <p className="text-sm text-indigo-100/90 leading-relaxed relative z-10 p-3 bg-white/5 rounded-xl border border-white/10 font-medium h-full overflow-y-auto hide-scrollbar">
-                {fraudAnalysis.flags.length > 0 ? (
+              <div className="text-sm text-indigo-100/90 leading-relaxed relative z-10 p-3 bg-white/5 rounded-xl border border-white/10 font-medium h-full overflow-y-auto hide-scrollbar">
+                {fraudAnalysis.explanations && fraudAnalysis.explanations.length > 0 ? (
                   <ul className="list-disc pl-4 space-y-1">
-                    {fraudAnalysis.flags.map((flag, idx) => <li key={idx}>{flag}</li>)}
+                    {fraudAnalysis.explanations.map((flag, idx) => <li key={idx}>{flag}</li>)}
                   </ul>
                 ) : (
                   "No anomalies detected. Amount matches expected ranges for this procedure type."
                 )}
-              </p>
+              </div>
             </>
           ) : (
             <div className="flex flex-col items-center justify-center flex-1 z-10">
@@ -269,9 +270,20 @@ export default function InsuranceClaimDetail() {
                         <span className="text-sm font-bold text-slate-700 hover:text-emerald-600 transition">Verified</span>
                       </label>
 
-                      <a href={doc.fileUrl} target="_blank" rel="noreferrer" className="px-4 py-2 bg-indigo-600 text-white font-bold rounded-lg text-sm hover:bg-indigo-700 shadow-sm transition">
+                      <button
+                        onClick={() => {
+                          if (doc.fileUrl && doc.fileUrl.startsWith('mock-storage://')) {
+                            toast.info(`Simulated view of document: ${doc.docType}. (File: ${doc.fileUrl.replace('mock-storage://', '')})`);
+                          } else if (doc.fileUrl) {
+                            window.open(doc.fileUrl, '_blank', 'noreferrer');
+                          } else {
+                            toast.error('No valid file URL found.');
+                          }
+                        }}
+                        className="px-4 py-2 bg-indigo-600 text-white font-bold rounded-lg text-sm hover:bg-indigo-700 shadow-sm transition"
+                      >
                         View File ↗
-                      </a>
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -312,23 +324,23 @@ export default function InsuranceClaimDetail() {
         <span className="font-bold text-slate-400 uppercase text-xs tracking-wider mr-auto hidden sm:block">Decision Actions</span>
 
         <button
-          disabled={["Approved", "Rejected"].includes(claim.status) || updating}
-          onClick={() => setShowConfirm("Pre-Authorized")}
+          disabled={["Approved", "Rejected", "Amount Released"].includes(claim.status) || updating}
+          onClick={() => setShowConfirm("Under Review")}
           className="px-6 py-3 rounded-xl font-bold bg-purple-50 text-purple-600 hover:bg-purple-100 border border-purple-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
-          Pre-Authorize
+          Mark Under Review
         </button>
 
         <button
-          disabled={["Approved", "Rejected"].includes(claim.status) || updating}
-          onClick={() => setShowConfirm("Pending-Docs")}
+          disabled={["Approved", "Rejected", "Amount Released"].includes(claim.status) || updating}
+          onClick={() => setShowConfirm("Additional Docs Required")}
           className="px-6 py-3 rounded-xl font-bold bg-amber-50 text-amber-600 hover:bg-amber-100 border border-amber-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           Request Docs
         </button>
 
         <button
-          disabled={["Approved", "Rejected"].includes(claim.status) || updating}
+          disabled={["Approved", "Rejected", "Amount Released"].includes(claim.status) || updating}
           onClick={() => setShowConfirm("Rejected")}
           className="px-6 py-3 rounded-xl font-bold bg-rose-50 text-rose-600 hover:bg-rose-100 border border-rose-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
@@ -336,12 +348,22 @@ export default function InsuranceClaimDetail() {
         </button>
 
         <button
-          disabled={["Approved", "Rejected"].includes(claim.status) || updating}
+          disabled={["Approved", "Rejected", "Amount Released"].includes(claim.status) || updating}
           onClick={() => setShowConfirm("Approved")}
           className="px-6 py-3 rounded-xl font-bold bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg shadow-emerald-600/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
         >
           Approve Entire Claim
         </button>
+
+        {claim.status === "Approved" && (
+          <button
+            disabled={updating}
+            onClick={() => setShowConfirm("Amount Released")}
+            className="px-6 py-3 rounded-xl font-bold bg-indigo-600 text-white hover:bg-indigo-700 shadow-lg shadow-indigo-600/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+          >
+            Release Amount
+          </button>
+        )}
       </motion.div>
 
       {/* Confirmation Modal */}
@@ -356,7 +378,7 @@ export default function InsuranceClaimDetail() {
                 Confirm Decision
               </h2>
               <p className="text-center text-slate-500 font-medium mb-6">
-                Are you sure you want to mark this claim as <span className="font-bold text-slate-700">{showConfirm === 'Pending-Docs' ? 'Pending Documents' : showConfirm}</span>?
+                Are you sure you want to mark this claim as <span className="font-bold text-slate-700">{showConfirm}</span>?
               </p>
 
               {showConfirm === "Rejected" && (
@@ -375,6 +397,13 @@ export default function InsuranceClaimDetail() {
                 </div>
               )}
 
+              {showConfirm === "Approved" && (
+                <div className="mb-6 bg-emerald-50 border border-emerald-100 p-4 rounded-xl">
+                    <p className="text-sm font-bold text-emerald-800 mb-1">Total Approved Amount</p>
+                    <p className="text-2xl font-black text-emerald-600">₹{claim.totalAmount?.toLocaleString()}</p>
+                </div>
+              )}
+
               <div className="flex justify-center gap-3">
                 <button
                   onClick={() => { setShowConfirm(null); setRejectReason(""); }}
@@ -385,7 +414,7 @@ export default function InsuranceClaimDetail() {
                 </button>
 
                 <button
-                  onClick={() => updateStatus(showConfirm === 'Pending-Docs' ? 'Pending' : showConfirm)}
+                  onClick={() => updateStatus(showConfirm)}
                   disabled={updating || (showConfirm === "Rejected" && !rejectReason.trim())}
                   className={`flex-1 px-4 py-3 rounded-xl font-bold text-white shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${showConfirm === 'Rejected' ? 'bg-rose-600 hover:bg-rose-700 shadow-rose-600/20' : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-600/20'}`}
                 >

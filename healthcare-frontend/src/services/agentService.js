@@ -43,9 +43,9 @@ export const getMedicalInsights = async (reportText) => {
 // AGENT 4: Fraud & Risk Detection Agent
 // ML Risk Analysis based on billing patterns and history
 // -------------------------------------------------------------
-export const runFraudDetection = async (age, claimAmount, previousClaimsCount) => {
+export const runFraudDetection = async (claimId, age, claimAmount, previousClaimsCount) => {
     try {
-        const response = await api.post('/agent/fraud-detection', { age, claimAmount, previousClaimsCount });
+        const response = await api.post('/agent/fraud-detection', { claimId, age, claimAmount, previousClaimsCount });
         return { success: true, data: response.data };
     } catch (error) {
         return { success: false, error: error.response?.data?.message || 'Agent 4 failed' };
@@ -62,5 +62,18 @@ export const analyzeCoverage = async (policyText, query) => {
         return { success: true, data: response.data };
     } catch (error) {
         return { success: false, error: error.response?.data?.message || 'Agent 5 failed' };
+    }
+};
+
+// -------------------------------------------------------------
+// MULTI-MODE GENERAL CHAT
+// Flexible prompt routing for medical, policy, or document analysis
+// -------------------------------------------------------------
+export const generalChat = async (mode, query, contextData) => {
+    try {
+        const response = await api.post('/agent/general-chat', { mode, query, contextData });
+        return { success: true, data: response.data };
+    } catch (error) {
+        return { success: false, error: error.response?.data?.message || 'General Chat failed' };
     }
 };

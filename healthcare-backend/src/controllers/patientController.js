@@ -1,5 +1,6 @@
 import Claim from '../models/Claim.js';
 import User from '../models/User.js';
+import DoctorSlot from '../models/DoctorSlot.js';
 
 // @desc    Get patient's own claims
 // @route   GET /api/patients/claims
@@ -46,6 +47,43 @@ export const uploadMissingDocument = async (req, res) => {
             updatedBy: req.user._id,
             comment: `Patient uploaded document: ${docType}`
         });
+
+        // Trigger Auto-Verification Hook
+        const requiredDocs = [
+            'Claim Form', 'ID Proof', 'Policy Card',
+            'Prescription', 'Discharge Summary', 'Pharmacy Bill',
+            'Investigation Report', 'NEFT Details'
+        ];
+
+        const docAliasMap = {
+            'Aadhaar Card (Patient ID)': 'ID Proof',
+            'PAN Card (Tax ID)': 'ID Proof',
+            'Insurance Policy Copy': 'Policy Card',
+            'Diagnostic Report': 'Investigation Report',
+            'Radiology (X-Ray/MRI/CT)': 'Investigation Report',
+            'Blood Test': 'Investigation Report',
+            'X-Ray': 'Investigation Report',
+            'CT Scan': 'Investigation Report',
+            'Ultrasound': 'Investigation Report',
+            'ECG': 'Investigation Report',
+            'Hospital Bill': 'Pharmacy Bill',
+            'Doctor\'s Prescription': 'Prescription',
+            'Diagnostic Reports (Blood/Urine)': 'Investigation Report',
+            'X-Ray / MRI / CT Scans': 'Investigation Report',
+            'Pharmacy Bills': 'Pharmacy Bill'
+        };
+
+        const providedDocs = claim.documents.map(d => docAliasMap[d.docType] || d.docType);
+        const missingDocuments = requiredDocs.filter(reqDoc => !providedDocs.includes(reqDoc));
+
+        if (missingDocuments.length === 0 && claim.status === 'Pending Documents') {
+            claim.status = 'Initiated';
+            claim.history.push({
+                status: 'Initiated',
+                updatedBy: req.user._id,
+                comment: 'All mandatory documents verified. Claim officially initiated.'
+            });
+        }
 
         await claim.save();
 
@@ -128,6 +166,96 @@ export const approveClaim = async (req, res) => {
         await claim.save();
 
         res.json({ success: true, data: claim });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// @desc    Get all available Doctor Slots for patients
+// @route   GET /api/patients/slots
+// @access  Private/Patient
+export const getAvailableSlots = async (req, res) => {
+    try {
+        // Find slots today or in the future
+        const today = new Date().toISOString().split('T')[0];
+        const slots = await DoctorSlot.find({ date: { $gte: today } }).populate('hospitalId', 'name');
+
+        res.json({ success: true, data: slots });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// @desc    Book a Doctor Slot
+// @route   POST /api/patients/slots/:id/book
+// @access  Private/Patient
+export const bookSlot = async (req, res) => {
+    try {
+        const slot = await DoctorSlot.findById(req.params.id);
+
+        if (!slot) {
+            return res.status(404).json({ success: false, message: 'Slot not found' });
+        }
+
+        if (slot.slotsFilled >= slot.maxSlots) {
+            return res.status(400).json({ success: false, message: 'This slot is fully booked' });
+        }
+
+        const isAlreadyBooked = slot.bookedPatients.find(p => p.patientId && p.patientId.toString() === req.user._id.toString());
+        if (isAlreadyBooked) {
+             return res.status(400).json({ success: false, message: 'You have already booked this slot' });
+        }
+
+        slot.bookedPatients.push({
+            patientId: req.user._id,
+            patientName: req.user.name,
+            patientEmail: req.user.email
+        });
+        slot.slotsFilled += 1;
+
+        await slot.save();
+
+        res.json({ success: true, data: slot });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// @desc    Get patient analytics widget data (expenses, limits)
+// @route   GET /api/patients/analytics
+// @access  Private/Patient
+export const getPatientAnalytics = async (req, res) => {
+    try {
+        const patient = await User.findById(req.user._id);
+
+        if (!patient) {
+            return res.status(404).json({ success: false, message: "Patient not found" });
+        }
+
+        // Real data might map total claim costs to their created month.
+        // For our prototype, we emulate a progressive cost timeline tied to user profile age or active claims.
+        const claims = await Claim.find({ patientId: req.user._id });
+        
+        let healthRisk = "Low Analysis";
+        if (claims.length > 3) healthRisk = "Moderate Risk";
+        if (claims.some(c => c.totalAmount > 300000)) healthRisk = "High Severity";
+
+        const expenseData = [
+            { month: "Jan", cost: Math.floor(Math.random() * 2000) },
+            { month: "Feb", cost: Math.floor(Math.random() * 5000) },
+            { month: "Mar", cost: Math.floor(Math.random() * 3000) },
+            { month: "Apr", cost: Math.floor(Math.random() * 1000) },
+            { month: "May", cost: claims.reduce((acc, c) => acc + (c.totalAmount || 0), 0) / 100 }, // Simulated slice of real current data
+        ];
+
+        res.json({
+            success: true,
+            data: {
+                healthRisk,
+                expenses: expenseData
+            }
+        });
+
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }

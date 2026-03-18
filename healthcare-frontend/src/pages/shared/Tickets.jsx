@@ -1,25 +1,66 @@
 import DashboardLayout from "../../layouts/DashboardLayout";
-import { useClaim } from "../../context/ClaimContext";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import api from "../../api/axios";
+import { toast } from "react-toastify";
 
 export default function Tickets({ role }) {
-  const { tickets, createTicket, updateTicketStatus } = useClaim();
+  const [tickets, setTickets] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   const [form, setForm] = useState({
     subject: "",
     message: "",
   });
 
-  const handleSubmit = (e) => {
+  useEffect(() => {
+    fetchTickets();
+  }, [role]);
+
+  const fetchTickets = async () => {
+    try {
+      setLoading(true);
+      const url = role === 'insurance' || role === 'admin' ? '/tickets' : '/tickets/my';
+      const response = await api.get(url);
+      if (response.data.success) {
+        setTickets(response.data.data);
+      }
+    } catch (error) {
+      toast.error("Failed to load tickets.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!form.subject.trim() || !form.message.trim()) return;
 
-    createTicket({
-      subject: form.subject,
-      message: form.message,
-      raisedBy: role,
-    });
+    try {
+      const response = await api.post('/tickets', {
+        subject: form.subject,
+        message: form.message,
+        raisedByRole: role.toUpperCase(),
+      });
+      if (response.data.success) {
+        toast.success("Support ticket submitted.");
+        setForm({ subject: "", message: "" });
+        fetchTickets();
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Failed to create ticket.");
+    }
+  };
 
-    setForm({ subject: "", message: "" });
+  const handleResolve = async (id) => {
+    try {
+      const response = await api.put(`/tickets/${id}/resolve`);
+      if (response.data.success) {
+        toast.success("Ticket marked as resolved.");
+        fetchTickets();
+      }
+    } catch (error) {
+      toast.error("Failed to resolve ticket.");
+    }
   };
 
   return (
@@ -64,14 +105,16 @@ export default function Tickets({ role }) {
       <div className="bg-white p-6 rounded-xl shadow-sm border">
         <h2 className="font-semibold mb-4">All Tickets</h2>
 
-        {tickets.length === 0 ? (
-          <p className="text-sm text-gray-500">
-            No tickets available.
-          </p>
-        ) : (
-          tickets.map((ticket) => (
-            <div
-              key={ticket.id}
+          {loading ? (
+            <p className="text-sm text-gray-500">Loading tickets...</p>
+          ) : tickets.length === 0 ? (
+            <p className="text-sm text-gray-500">
+              No tickets available.
+            </p>
+          ) : (
+            tickets.map((ticket) => (
+              <div
+                key={ticket._id}
               className="border p-4 rounded-lg mb-4"
             >
               <p className="font-semibold">{ticket.subject}</p>
@@ -85,12 +128,10 @@ export default function Tickets({ role }) {
                 </span>
               </p>
 
-              {role !== "patient" && ticket.status === "Open" && (
+            {role !== "patient" && ticket.status === "Open" && (
                 <button
-                  onClick={() =>
-                    updateTicketStatus(ticket.id, "Resolved")
-                  }
-                  className="mt-2 bg-green-600 text-white px-3 py-1 rounded-lg"
+                  onClick={() => handleResolve(ticket._id)}
+                  className="mt-2 text-xs font-bold bg-emerald-100 text-emerald-700 px-3 py-1.5 rounded-lg hover:bg-emerald-200"
                 >
                   Mark Resolved
                 </button>

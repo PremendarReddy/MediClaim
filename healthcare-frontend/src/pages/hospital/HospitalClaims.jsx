@@ -67,13 +67,13 @@ export default function HospitalClaims() {
         <div className="bg-emerald-50 p-5 rounded-2xl border border-emerald-100">
           <p className="text-sm font-semibold text-emerald-700 mb-1">Approved</p>
           <p className="text-3xl font-bold text-emerald-600">
-            {loading ? "..." : claims.filter((c) => c.status === "Approved").length}
+            {loading ? "..." : claims.filter((c) => ["Approved", "Amount Released"].includes(c.status)).length}
           </p>
         </div>
         <div className="bg-amber-50 p-5 rounded-2xl border border-amber-100">
           <p className="text-sm font-semibold text-amber-700 mb-1">In Progress</p>
           <p className="text-3xl font-bold text-amber-600">
-            {loading ? "..." : claims.filter((c) => c.status !== "Approved" && c.status !== "Rejected").length}
+            {loading ? "..." : claims.filter((c) => !["Approved", "Rejected", "Amount Released"].includes(c.status)).length}
           </p>
         </div>
         <div className="bg-rose-50 p-5 rounded-2xl border border-rose-100">
@@ -104,10 +104,12 @@ export default function HospitalClaims() {
           onChange={(e) => setFilterStatus(e.target.value)}
         >
           <option value="All Status">All Status</option>
+          <option value="Pending Documents">Pending Documents</option>
           <option value="Claim Initiated">Claim Initiated</option>
           <option value="Pre-Authorization Pending">Pre-Authorization Pending</option>
           <option value="Under Review">Under Review</option>
           <option value="Approved">Approved</option>
+          <option value="Amount Released">Amount Released</option>
           <option value="Rejected">Rejected</option>
         </select>
       </div>
@@ -174,7 +176,7 @@ export default function HospitalClaims() {
                       </div>
                     </td>
                     <td className="px-6 py-4 text-sm font-bold text-slate-800">
-                      ₹{claim.claimAmount?.toLocaleString()}
+                      ₹{claim.totalAmount?.toLocaleString()}
                     </td>
                     <td className="px-6 py-4 text-sm">
                       <StatusBadge status={claim.status} />

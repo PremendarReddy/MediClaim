@@ -29,6 +29,10 @@ export default function HospitalDashboard() {
     pendingClaims: 0,
     alerts: 0
   });
+  const [analytics, setAnalytics] = useState({
+    monthlyAdmissions: [],
+    claimDistribution: []
+  });
   const [claims, setClaims] = useState([]);
 
   useEffect(() => {
@@ -40,45 +44,35 @@ export default function HospitalDashboard() {
       setLoading(true);
       // Fetch Patients
       const patientsRes = await api.get('/hospitals/patients');
+      // Fetch Claims
+      const claimsRes = await api.get('/hospitals/claims');
 
-      // In a real expanded API we'd fetch actual claims for this hospital.
-      // For now, we mock some activity as placeholder until Hospital Claims route is built
+      const allClaims = claimsRes.data.data || [];
+
+      // Fetch Live Analytics Chart Data 
+      try {
+        const analyticsRes = await api.get('/hospitals/analytics');
+        if (analyticsRes.data.success) {
+            setAnalytics(analyticsRes.data.data);
+        }
+      } catch (err) {
+        console.warn("Analytics fetch failed", err);
+      }
 
       setStats({
         totalPatients: patientsRes.data.count || patientsRes.data.data?.length || 0,
-        reportsUploaded: Math.floor(Math.random() * 50) + 10,
-        pendingClaims: 8,
-        alerts: 2
+        reportsUploaded: allClaims.reduce((acc, c) => acc + (c.documents?.length || 0), 0),
+        pendingClaims: allClaims.filter(c => c.status === "Pending" || c.status === "Submitted").length,
+        alerts: 2 // Assuming static alerts logic or expand later
       });
 
-      // Mock recent activity feed since actual API claims endpoint might not be populated in this DB yet
-      setClaims([
-        { id: "CLM-992", patient: "John Doe", status: "AI Verified", time: "10 mins ago", type: "Discharge" },
-        { id: "CLM-991", patient: "Sarah Smith", status: "Fraud Check", time: "1 hour ago", type: "Surgery" },
-        { id: "CLM-990", patient: "Mike Ross", status: "Approved", time: "3 hours ago", type: "Consultation" },
-        { id: "CLM-989", patient: "Emma Stone", status: "Needs Docs", time: "5 hours ago", type: "Pharmacy" }
-      ]);
+      setClaims(allClaims);
       setLoading(false);
     } catch (error) {
       toast.error("Failed to load dashboard data");
       setLoading(false);
     }
   };
-
-  // Mock charts for dashboard visual purposes
-  const monthlyAdmissions = [
-    { month: "Jan", patients: 12 },
-    { month: "Feb", patients: 19 },
-    { month: "Mar", patients: 15 },
-    { month: "Apr", patients: 25 },
-    { month: "May", patients: 22 },
-  ];
-
-  const claimDistribution = [
-    { name: "Approved", value: 45 },
-    { name: "Pending", value: 25 },
-    { name: "Rejected", value: 10 },
-  ];
 
   return (
     <DashboardLayout>
@@ -140,7 +134,7 @@ export default function HospitalDashboard() {
         >
           <h2 className="text-lg font-bold text-slate-800 mb-6">Monthly Admissions</h2>
           <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={monthlyAdmissions}>
+            <BarChart data={analytics.monthlyAdmissions}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
               <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: '#64748b' }} dy={10} />
               <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b' }} dx={-10} />
@@ -161,7 +155,7 @@ export default function HospitalDashboard() {
           <ResponsiveContainer width="100%" height={280}>
             <PieChart>
               <Pie
-                data={claimDistribution}
+                data={analytics.claimDistribution}
                 dataKey="value"
                 nameKey="name"
                 cx="50%"
@@ -170,7 +164,7 @@ export default function HospitalDashboard() {
                 outerRadius={100}
                 paddingAngle={5}
               >
-                {claimDistribution.map((entry, index) => (
+                {analytics.claimDistribution.map((entry, index) => (
                   <Cell key={index} fill={COLORS[index % COLORS.length]} stroke="transparent" />
                 ))}
               </Pie>
@@ -178,7 +172,7 @@ export default function HospitalDashboard() {
             </PieChart>
           </ResponsiveContainer>
           <div className="flex justify-center gap-6 mt-4">
-            {claimDistribution.map((item, i) => (
+            {analytics.claimDistribution.map((item, i) => (
               <div key={item.name} className="flex items-center gap-2 text-sm text-slate-600">
                 <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[i] }}></div>
                 {item.name}
@@ -211,31 +205,33 @@ export default function HospitalDashboard() {
           ) : (
             <div className="space-y-4 relative">
               <div className="absolute left-[23px] top-6 bottom-6 w-0.5 bg-slate-100 z-0"></div>
-              {claims.map((claim, idx) => (
+              {claims.slice(0, 5).map((claim, idx) => (
                 <motion.div
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: 0.1 * idx }}
-                  key={claim.id}
+                  key={claim._id}
                   className="flex gap-4 relative z-10 group"
                 >
                   <div className="w-12 h-12 rounded-full border-4 border-white shadow-sm flex items-center justify-center shrink-0 bg-slate-50 text-xl overflow-hidden group-hover:scale-110 transition-transform">
-                    {claim.status === "AI Verified" ? "✨" : claim.status === "Fraud Check" ? "🛡️" : claim.status === "Approved" ? "✅" : "⚠️"}
+                    {claim.status === "Approved" ? "✅" : claim.status === "Rejected" ? "❌" : "⏳"}
                   </div>
-                  <div className="bg-slate-50 hover:bg-slate-100 border border-slate-100 rounded-2xl p-4 flex-1 transition-colors flex justify-between items-center cursor-pointer">
+                  <div 
+                    onClick={() => navigate(`/hospital/claims/${claim._id}`)}
+                    className="bg-slate-50 hover:bg-slate-100 border border-slate-100 rounded-2xl p-4 flex-1 transition-colors flex justify-between items-center cursor-pointer"
+                  >
                     <div>
                       <p className="font-bold text-slate-800 text-sm mb-0.5">
-                        {claim.patient} <span className="font-mono text-xs text-slate-400 font-normal ml-2">{claim.id}</span>
+                        {claim.patientId?.name || "Unknown Patient"} <span className="font-mono text-xs text-slate-400 font-normal ml-2">{claim._id.substring(0, 8)}</span>
                       </p>
                       <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
                         <span className={
-                          claim.status === "AI Verified" ? "text-indigo-600" :
-                            claim.status === "Fraud Check" ? "text-amber-500" :
-                              claim.status === "Approved" ? "text-emerald-500" : "text-rose-500"
-                        }>{claim.status}</span> • {claim.type}
+                          claim.status === "Approved" ? "text-emerald-500" :
+                            claim.status === "Rejected" ? "text-rose-500" : "text-amber-500"
+                        }>{claim.status}</span> • Claim Update
                       </p>
                     </div>
-                    <span className="text-xs font-medium text-slate-400">{claim.time}</span>
+                    <span className="text-xs font-medium text-slate-400">{new Date(claim.createdAt).toLocaleDateString()}</span>
                   </div>
                 </motion.div>
               ))}

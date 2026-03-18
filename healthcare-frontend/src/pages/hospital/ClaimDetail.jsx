@@ -13,6 +13,11 @@ export default function ClaimDetail() {
   const [claim, setClaim] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Document Upload State
+  const [isUploading, setIsUploading] = useState(false);
+  const [docType, setDocType] = useState("ID Proof");
+  const [uploadFile, setUploadFile] = useState(null);
+
   useEffect(() => {
     fetchClaimDetails();
   }, [id]);
@@ -48,6 +53,35 @@ export default function ClaimDetail() {
     }
   };
 
+  const handleDocumentUpload = async (e) => {
+    e.preventDefault();
+    if (!uploadFile || !docType) {
+      toast.warning("Please select a document type and a file to upload.");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("docType", docType);
+    formData.append("file", uploadFile);
+
+    setIsUploading(true);
+    try {
+      const res = await api.put(`/hospitals/claims/${id}/documents`, formData, {
+        headers: { "Content-Type": "multipart/form-data" }
+      });
+      if (res.data.success) {
+        toast.success(`${docType} successfully attached to claim.`);
+        setClaim(res.data.data); // Replace claim state with updated object (includes new status if verified)
+        setUploadFile(null);
+        setDocType("ID Proof");
+      }
+    } catch (error) {
+      toast.error("Failed to upload document");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   if (loading) {
     return (
       <DashboardLayout>
@@ -78,7 +112,38 @@ export default function ClaimDetail() {
 
   return (
     <DashboardLayout>
-      <div className="flex justify-between items-start mb-8">
+      {/* Calculate Missing Documents locally for UI rendering */}
+      {(() => {
+        const requiredDocs = [
+            'Claim Form', 'ID Proof', 'Policy Card',
+            'Prescription', 'Discharge Summary', 'Pharmacy Bill',
+            'Investigation Report', 'NEFT Details'
+        ];
+        
+        const docAliasMap = {
+            'Aadhaar Card (Patient ID)': 'ID Proof',
+            'PAN Card (Tax ID)': 'ID Proof',
+            'Insurance Policy Copy': 'Policy Card',
+            'Diagnostic Report': 'Investigation Report',
+            'Radiology (X-Ray/MRI/CT)': 'Investigation Report',
+            'Blood Test': 'Investigation Report',
+            'X-Ray': 'Investigation Report',
+            'CT Scan': 'Investigation Report',
+            'Ultrasound': 'Investigation Report',
+            'ECG': 'Investigation Report',
+            'Hospital Bill': 'Pharmacy Bill',
+            'Doctor\'s Prescription': 'Prescription',
+            'Diagnostic Reports (Blood/Urine)': 'Investigation Report',
+            'X-Ray / MRI / CT Scans': 'Investigation Report',
+            'Pharmacy Bills': 'Pharmacy Bill'
+        };
+
+        const providedDocs = claim?.documents?.map(d => docAliasMap[d.docType] || d.docType) || [];
+        const missingDocuments = requiredDocs.filter(reqDoc => !providedDocs.includes(reqDoc));
+
+        return (
+          <>
+            <div className="flex justify-between items-start mb-8">
         <div>
           <h1 className="text-3xl font-bold text-slate-900 mb-1">
             Claim Summary
@@ -112,7 +177,7 @@ export default function ClaimDetail() {
               </div>
               <div>
                 <p className="text-sm font-semibold text-slate-500 mb-1">Total Amount Requested</p>
-                <p className="font-bold text-2xl text-slate-800">₹{claim.claimAmount?.toLocaleString()}</p>
+                <p className="font-bold text-2xl text-slate-800">₹{claim.totalAmount?.toLocaleString()}</p>
               </div>
               <div className="col-span-2">
                 <p className="text-sm font-semibold text-slate-500 mb-2">Claim Status</p>
@@ -155,6 +220,61 @@ export default function ClaimDetail() {
               <div className="text-center py-6 bg-slate-50 rounded-xl border border-slate-100 border-dashed">
                 <p className="text-sm font-bold text-slate-400">No documents attached.</p>
               </div>
+            )}
+
+            {/* Missing Document Uploader (Only if not verified/approved) */}
+            {claim.status === "Pending Documents" && (
+                <div className="mt-6 border border-amber-200 bg-amber-50 rounded-2xl p-6">
+                  <h4 className="font-bold text-amber-800 mb-2 flex items-center gap-2">
+                     <span className="text-amber-500">⚠️</span> Missing Mandatory Documents
+                  </h4>
+                  <p className="text-sm text-amber-700 mb-4">
+                     This claim is blocked. Attach the required documents to automatically push the status to <b>Initiated</b>.
+                  </p>
+
+                  <ul className="mb-6 space-y-2">
+                    {missingDocuments.map((doc, idx) => (
+                        <li key={idx} className="flex items-center gap-2 text-sm font-bold text-amber-900 bg-amber-100/50 px-3 py-2 rounded-lg border border-amber-200/50">
+                            <span className="text-amber-600">❌</span> {doc}
+                        </li>
+                    ))}
+                  </ul>
+                  
+                  <form onSubmit={handleDocumentUpload} className="flex flex-col sm:flex-row gap-3 items-end">
+                      <div className="w-full sm:w-1/3">
+                          <label className="block text-xs font-bold text-amber-800 uppercase tracking-wider mb-1">Doc Type</label>
+                          <select 
+                             value={docType} 
+                             onChange={(e) => setDocType(e.target.value)}
+                             className="w-full border border-amber-300 rounded-lg py-2.5 px-3 focus:ring-2 focus:ring-amber-500 font-medium text-slate-700 bg-white"
+                          >
+                              <option value="Claim Form">Claim Form</option>
+                              <option value="ID Proof">ID Proof</option>
+                              <option value="Policy Card">Policy Card</option>
+                              <option value="Prescription">Prescription</option>
+                              <option value="Discharge Summary">Discharge Summary</option>
+                              <option value="Pharmacy Bill">Pharmacy Bill</option>
+                              <option value="Investigation Report">Investigation Report</option>
+                              <option value="NEFT Details">NEFT Details</option>
+                          </select>
+                      </div>
+                      <div className="w-full sm:w-2/3">
+                         <label className="block text-xs font-bold text-amber-800 uppercase tracking-wider mb-1">File</label>
+                         <input 
+                             type="file" 
+                             onChange={(e) => setUploadFile(e.target.files[0])}
+                             className="w-full border border-amber-300 rounded-lg py-2 px-3 focus:outline-none bg-white font-medium text-slate-600 text-sm"
+                         />
+                      </div>
+                      <button 
+                         type="submit" 
+                         disabled={isUploading}
+                         className="w-full sm:w-auto bg-amber-500 hover:bg-amber-600 text-white font-bold py-2.5 px-5 rounded-lg shadow-sm transition disabled:opacity-60 whitespace-nowrap"
+                      >
+                         {isUploading ? "Uploading..." : "Attach"}
+                      </button>
+                  </form>
+                </div>
             )}
           </motion.div>
 
@@ -233,7 +353,7 @@ export default function ClaimDetail() {
               </button>
 
               <button
-                disabled={claim.status === "Approved"}
+                disabled={["Approved", "Amount Released", "Rejected"].includes(claim.status)}
                 onClick={() => handleStatusUpdate("Approved")}
                 className="w-full bg-emerald-600 text-white font-bold px-5 py-3 rounded-xl hover:bg-emerald-700 shadow-lg shadow-emerald-600/20 transition disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -241,7 +361,7 @@ export default function ClaimDetail() {
               </button>
 
               <button
-                disabled={claim.status === "Rejected"}
+                disabled={["Approved", "Amount Released", "Rejected"].includes(claim.status)}
                 onClick={() => handleStatusUpdate("Rejected")}
                 className="w-full bg-rose-600 text-white font-bold px-5 py-3 rounded-xl hover:bg-rose-700 shadow-lg shadow-rose-600/20 transition disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -251,6 +371,9 @@ export default function ClaimDetail() {
           </div>
         </div>
       </div>
+          </>
+        );
+      })()}
     </DashboardLayout>
   );
 }

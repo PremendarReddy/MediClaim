@@ -1,21 +1,24 @@
 import User from '../models/User.js';
 import Claim from '../models/Claim.js';
+import DoctorSlot from '../models/DoctorSlot.js';
 import { generatePassword } from '../services/utils.js';
 import { sendOTPEmail, sendWelcomeEmail } from '../services/emailService.js';
+import { sendOTPSMS } from '../services/smsService.js';
 import bcrypt from 'bcryptjs';
+import { analyzeInsuranceDocument } from '../services/aiService.js';
 
 // Temporary in-memory store for OTPs (in production, use Redis)
 const otpStore = new Map();
 
-// @desc    Send OTP to patient email
+// @desc    Send OTP to patient email and phone
 // @route   POST /api/hospitals/patients/send-otp
 // @access  Private/Hospital
 export const sendPatientOTP = async (req, res) => {
     try {
-        const { email } = req.body;
+        const { email, phone } = req.body;
 
-        if (!email) {
-            return res.status(400).json({ success: false, message: "Email is required" });
+        if (!email || !phone) {
+            return res.status(400).json({ success: false, message: "Email and Phone are required" });
         }
 
         const userExists = await User.findOne({ email });
@@ -30,11 +33,12 @@ export const sendPatientOTP = async (req, res) => {
         otpStore.set(email, { otp, expiresAt: Date.now() + 10 * 60 * 1000 });
 
         // Actually send it
-        const result = await sendOTPEmail(email, otp);
+        const emailResult = await sendOTPEmail(email, otp);
+        const smsResult = await sendOTPSMS(phone, otp);
 
-        if (!result.success) {
-            console.warn("Resend email failed, but proceeding in dev environment. See console for OTP.");
-            // Don't crash for missing Resend key in dev, just continue.
+        if (!emailResult.success || !smsResult.success) {
+            console.warn("OTP delivery failed for one or more channels, but proceeding in dev environment. See console for OTP.");
+            // Don't crash for missing keys in dev, just continue.
         }
 
         res.json({ success: true, message: "OTP sent successfully" });
@@ -48,7 +52,15 @@ export const sendPatientOTP = async (req, res) => {
 // @access  Private/Hospital
 export const registerPatient = async (req, res) => {
     try {
-        const { name, email, patientDetails, otp } = req.body;
+        console.log("REGISTER PATIENT Body:", req.body);
+        console.log("REGISTER PATIENT File:", req.file);
+        
+        let { name, email, patientDetails, otp } = req.body;
+
+        // since we are using FormData now, patientDetails will be a stringified object
+        if (typeof patientDetails === 'string') {
+            patientDetails = JSON.parse(patientDetails);
+        }
 
         const userExists = await User.findOne({ email });
         if (userExists) {
@@ -77,6 +89,34 @@ export const registerPatient = async (req, res) => {
         // OTP verifed successfully. Clear it.
         otpStore.delete(email);
 
+        // --- AI DOCUMENT ANALYSIS ---
+        let finalInsuranceDetails = patientDetails.insuranceDetails || null;
+        
+        if (req.file && finalInsuranceDetails) {
+            // Build the public URL for the uploaded file
+            const fileUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
+            
+            // Populate the document record
+            finalInsuranceDetails.insuranceDocuments = [{
+                docName: req.file.originalname,
+                fileUrl: fileUrl,
+                uploadedDate: Date.now()
+            }];
+            
+            // Run AI Analysis
+            const aiData = await analyzeInsuranceDocument(req.file.path, req.file.mimetype);
+            if (aiData) {
+                 // Merge the AI extracted coverage limits into the explicit record
+                 console.log("AI Extracted details:", aiData);
+                 if (aiData.coverageAmount) finalInsuranceDetails.coverageAmount = aiData.coverageAmount;
+                 if (aiData.validUpto) finalInsuranceDetails.validUpto = aiData.validUpto;
+                 // Set balance amount equally to coverage amount initially if needed
+                 if (aiData.coverageAmount && !finalInsuranceDetails.balanceAmount) {
+                     finalInsuranceDetails.balanceAmount = aiData.coverageAmount;
+                 }
+            }
+        }
+
         // Auto-generate a password for the patient to login with later
         const generatedPassword = generatePassword();
 
@@ -87,6 +127,7 @@ export const registerPatient = async (req, res) => {
             role: 'PATIENT',
             patientDetails: {
                 ...patientDetails,
+                insuranceDetails: finalInsuranceDetails,
                 registeredByHospital: req.user._id
             }
         });
@@ -185,19 +226,89 @@ export const createClaim = async (req, res) => {
         // Generate unique claim number
         const claimNumber = `CLM-${Date.now().toString().slice(-6)}-${Math.floor(Math.random() * 1000)}`;
 
+        // Document Verification Logic
+        const requiredDocs = [
+            'Claim Form', 'ID Proof', 'Policy Card',
+            'Prescription', 'Discharge Summary', 'Pharmacy Bill',
+            'Investigation Report', 'NEFT Details'
+        ];
+        
+        // Final array of documents to attach
+        let finalDocuments = documents ? [...documents] : [];
+        const explicitlyProvidedDocs = finalDocuments.map(d => d.docType);
+
+        // Auto-Attacher: Map vault types to claim required types
+        const vaultToClaimMap = {
+            'Aadhaar Card (Patient ID)': 'ID Proof',
+            'PAN Card (Tax ID)': 'ID Proof',
+            'Insurance Policy Copy': 'Policy Card',
+            'Diagnostic Report': 'Investigation Report',
+            'Radiology (X-Ray/MRI/CT)': 'Investigation Report',
+            'Blood Test': 'Investigation Report',
+            'X-Ray': 'Investigation Report',
+            'CT Scan': 'Investigation Report',
+            'Ultrasound': 'Investigation Report',
+            'ECG': 'Investigation Report',
+            'Hospital Bill': 'Pharmacy Bill',
+            'Doctor\'s Prescription': 'Prescription',
+            'Diagnostic Reports (Blood/Urine)': 'Investigation Report',
+            'X-Ray / MRI / CT Scans': 'Investigation Report',
+            'Pharmacy Bills': 'Pharmacy Bill'
+        };
+
+        // Scan Patient Vault (medicalHistory and insuranceDocuments)
+        const patientInsuranceDocs = (patient.patientDetails?.insuranceDetails?.insuranceDocuments || []).map(doc => ({
+            docType: 'Insurance Policy Copy',
+            fileUrl: doc.fileUrl
+        }));
+
+        const patientVault = [
+            ...(patient.patientDetails?.medicalHistory || []),
+            ...patientInsuranceDocs
+        ];
+
+        patientVault.forEach(vaultDoc => {
+            const mappedClaimDocType = vaultToClaimMap[vaultDoc.docType];
+
+            // If the vault document matches a required claim doc and the hospital hasn't explicitly uploaded one
+            if (mappedClaimDocType && !explicitlyProvidedDocs.includes(mappedClaimDocType)) {
+                // Ensure we don't attach multiple of the same mapped type
+                const alreadyAutoAttached = finalDocuments.find(d => d.docType === mappedClaimDocType);
+                if (!alreadyAutoAttached) {
+                    finalDocuments.push({
+                        docType: mappedClaimDocType,
+                        fileUrl: vaultDoc.fileUrl,
+                        uploadedBy: req.user._id, // Assume hospital is attributing it
+                        remarks: `Auto-attached from Patient Vault (${vaultDoc.docType})`,
+                        received: true,
+                        verified: true // Pre-verified if from system vault 
+                    });
+                }
+            }
+        });
+
+        const providedDocs = finalDocuments.map(d => vaultToClaimMap[d.docType] || d.docType);
+        const missingDocuments = requiredDocs.filter(reqDoc => !providedDocs.includes(reqDoc));
+
+        // Determine Initial Status
+        const initialStatus = missingDocuments.length === 0 ? 'Initiated' : 'Pending Documents';
+        const initialComment = missingDocuments.length === 0 
+           ? 'Claim drafted and fully verified (including Vault docs). Initiated.' 
+           : `Claim drafted but awaiting mandatory documents: ${missingDocuments.join(', ')}`;
+
         const claim = await Claim.create({
             claimNumber,
             patientId,
             hospitalId: req.user._id,
             insuranceCompanyId,
             totalAmount,
-            status: 'Initiated', // Claim Processing Agent will pick this up
-            documents: documents || [],
+            status: initialStatus,
+            documents: finalDocuments,
             history: [
                 {
-                    status: 'Initiated',
+                    status: initialStatus,
                     updatedBy: req.user._id,
-                    comment: 'Claim drafted by hospital.'
+                    comment: initialComment
                 }
             ]
         });
@@ -210,7 +321,7 @@ export const createClaim = async (req, res) => {
     }
 };
 
-// @desc    Send OTP to patient email for claim initiation consent
+// @desc    Send OTP to patient email and phone for claim initiation consent
 // @route   POST /api/hospitals/patients/:id/send-consent-otp
 // @access  Private/Hospital
 export const sendClaimInitiationOTP = async (req, res) => {
@@ -235,13 +346,21 @@ export const sendClaimInitiationOTP = async (req, res) => {
         otpStore.set(otpKey, { otp, expiresAt: Date.now() + 10 * 60 * 1000 });
 
         // Actually send it
-        const result = await sendOTPEmail(patient.email, otp);
-
-        if (!result.success) {
-            console.warn("Resend email failed, but proceeding in dev environment. See console for OTP.");
+        const emailResult = await sendOTPEmail(patient.email, otp);
+        const { phoneNumber } = patient.patientDetails;
+        
+        let smsResult = { success: true }; // Mock success if no phone provided, though it should be
+        if (phoneNumber) {
+            smsResult = await sendOTPSMS(phoneNumber, otp);
+        } else {
+             console.warn(`[SMS Service] No phone number found for patient ${patientId}`);
         }
 
-        res.json({ success: true, message: "Consent OTP sent successfully to patient's email" });
+        if (!emailResult.success || !smsResult.success) {
+            console.warn("OTP delivery failed for one or more channels, but proceeding in dev environment. See console for OTP.");
+        }
+
+        res.json({ success: true, message: "Consent OTP sent successfully to patient's email and phone" });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
@@ -333,6 +452,228 @@ export const updateClaimStatus = async (req, res) => {
         await claim.save();
 
         res.json({ success: true, data: claim });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// @desc    Add a new Doctor Slot
+// @route   POST /api/hospitals/slots
+// @access  Private/Hospital
+export const addDoctorSlot = async (req, res) => {
+    try {
+        const { doctorName, specialty, date, time, maxSlots } = req.body;
+
+        const slot = await DoctorSlot.create({
+            hospitalId: req.user._id,
+            doctorName,
+            specialty,
+            date,
+            time,
+            maxSlots: maxSlots || 1
+        });
+
+        res.status(201).json({ success: true, data: slot });
+    } catch (error) {
+        // Handle unique constraint error
+        if (error.code === 11000) {
+            return res.status(400).json({ success: false, message: 'This specific doctor slot already exists.' });
+        }
+        console.error("SLOT CREATION ERROR:", error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// @desc    Get all Doctor Slots for this hospital
+// @route   GET /api/hospitals/slots
+// @access  Private/Hospital
+export const getHospitalSlots = async (req, res) => {
+    try {
+        const slots = await DoctorSlot.find({ hospitalId: req.user._id })
+            .sort({ date: 1, time: 1 })
+            .populate('bookedPatients.patientId', 'name email');
+
+        res.json({ success: true, data: slots });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// @desc    Update a completely registered patient's details
+// @route   PUT /api/hospitals/patients/:id
+// @access  Private/Hospital
+export const updatePatientDetails = async (req, res) => {
+    try {
+        const { status, nextCheckupDate } = req.body;
+
+        const patient = await User.findOne({ _id: req.params.id, role: 'PATIENT' });
+        
+        if (!patient) {
+            return res.status(404).json({ success: false, message: 'Patient not found' });
+        }
+
+        // We could enforce that the hospital updating is the hospital who registered them
+        if (patient.patientDetails.registeredByHospital && 
+            patient.patientDetails.registeredByHospital.toString() !== req.user._id.toString()) {
+            return res.status(401).json({ success: false, message: 'Not authorized to update this patient' });
+        }
+
+        if (status) patient.patientDetails.status = status;
+        
+        // Let it be cleared optionally if undefined, but usually handled from frontend
+        if (nextCheckupDate !== undefined) {
+             patient.patientDetails.nextCheckupDate = nextCheckupDate;
+        }
+
+        await patient.save();
+
+        res.json({ success: true, data: patient });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// @desc    Get hospital analytics dashboard widgets
+// @route   GET /api/hospitals/analytics
+// @access  Private/Hospital
+export const getHospitalAnalytics = async (req, res) => {
+    try {
+        const claims = await Claim.find({ hospitalId: req.user._id });
+        const patients = await User.find({ role: 'PATIENT', 'patientDetails.registeredByHospital': req.user._id });
+
+        // Calculate Monthly Admissions (Mock trend but scaled to real patient count)
+        // In reality, we group by createdAt of patients.
+        const months = ["Jan", "Feb", "Mar", "Apr", "May"];
+        const monthlyAdmissions = months.map(m => ({ month: m, patients: Math.floor(Math.random() * (patients.length || 10)) }));
+
+        // Calculate Claim Distribution exact numbers
+        const approvedCount = claims.filter(c => c.status === 'Approved').length;
+        const rejectedCount = claims.filter(c => c.status === 'Rejected').length;
+        const pendingCount = claims.filter(c => c.status !== 'Approved' && c.status !== 'Rejected').length;
+
+        const claimDistribution = [
+            { name: "Approved", value: approvedCount > 0 ? approvedCount : 1 }, // Fallback to 1 so chart isn't empty if 0
+            { name: "Pending", value: pendingCount > 0 ? pendingCount : 1 },
+            { name: "Rejected", value: rejectedCount }
+        ];
+
+        res.json({
+            success: true,
+            data: {
+                monthlyAdmissions,
+                claimDistribution
+            }
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// @desc    Upload document direct to a patient profile (Hospital action)
+// @route   POST /api/hospitals/patients/:id/documents
+// @access  Private/Hospital
+export const uploadPatientDocument = async (req, res) => {
+    try {
+        const patientId = req.params.id;
+        const { docType } = req.body;
+
+        if (!docType || !req.file) {
+            return res.status(400).json({ success: false, message: 'Missing document parameters or file' });
+        }
+
+        const patient = await User.findOne({ _id: patientId, role: 'PATIENT', 'patientDetails.registeredByHospital': req.user._id });
+        if (!patient) return res.status(404).json({ success: false, message: 'Patient not found' });
+
+        // Build the public URL for the uploaded file
+        const fileUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
+
+        const newDoc = {
+            docType,
+            fileUrl,
+            uploadedDate: new Date()
+        };
+
+        patient.patientDetails.medicalHistory.push(newDoc);
+        await patient.save();
+
+        res.json({ success: true, message: 'Document added to patient record', data: newDoc });
+
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// @desc    Upload additional document to a drafted/pending claim (Hospital side)
+// @route   PUT /api/hospitals/claims/:id/documents
+// @access  Private/Hospital
+export const uploadMissingDocumentHospital = async (req, res) => {
+    try {
+        const { docType } = req.body;
+        
+        if (!docType || !req.file) {
+            return res.status(400).json({ success: false, message: 'Missing document type or file' });
+        }
+
+        const claim = await Claim.findOne({ _id: req.params.id, hospitalId: req.user._id });
+
+        if (!claim) {
+            return res.status(404).json({ success: false, message: 'Claim not found or unauthorized' });
+        }
+
+        const fileUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
+
+        claim.documents.push({
+            docType,
+            fileUrl,
+            uploadedBy: req.user._id,
+            remarks: `Uploaded by hospital to supplement claim`
+        });
+
+        claim.history.push({
+            status: claim.status,
+            updatedBy: req.user._id,
+            comment: `Hospital uploaded supplemental document: ${docType}`
+        });
+
+        // Trigger Auto-Verification Hook
+        const requiredDocs = [
+            'Claim Form', 'ID Proof', 'Policy Card',
+            'Prescription', 'Discharge Summary', 'Pharmacy Bill',
+            'Investigation Report', 'NEFT Details'
+        ];
+
+        const docAliasMap = {
+            'Aadhaar Card (Patient ID)': 'ID Proof',
+            'PAN Card (Tax ID)': 'ID Proof',
+            'Insurance Policy Copy': 'Policy Card',
+            'Diagnostic Report': 'Investigation Report',
+            'Radiology (X-Ray/MRI/CT)': 'Investigation Report',
+            'Blood Test': 'Investigation Report',
+            'X-Ray': 'Investigation Report',
+            'CT Scan': 'Investigation Report',
+            'Ultrasound': 'Investigation Report',
+            'ECG': 'Investigation Report',
+            'Hospital Bill': 'Pharmacy Bill',
+            'Doctor\'s Prescription': 'Prescription',
+            'Diagnostic Reports (Blood/Urine)': 'Investigation Report',
+            'X-Ray / MRI / CT Scans': 'Investigation Report',
+            'Pharmacy Bills': 'Pharmacy Bill'
+        };
+
+        const providedDocs = claim.documents.map(d => docAliasMap[d.docType] || d.docType);
+        const missingDocuments = requiredDocs.filter(reqDoc => !providedDocs.includes(reqDoc));
+
+        if (missingDocuments.length === 0 && claim.status === 'Pending Documents') {
+            claim.status = 'Initiated';
+            claim.history.push({
+                status: 'Initiated',
+                updatedBy: req.user._id,
+                comment: 'All mandatory documents verified. Claim officially initiated and sent to insurer.'
+            });
+        }
+
+        await claim.save();
+        res.json({ success: true, message: 'Document added to claim', data: claim });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }

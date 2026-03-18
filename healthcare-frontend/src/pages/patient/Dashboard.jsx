@@ -22,45 +22,53 @@ export default function PatientDashboard() {
 
   const [patientData, setPatientData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [analytics, setAnalytics] = useState({ healthRisk: "Analyzing...", expenses: [] });
 
   useEffect(() => {
-    // In a real app we would have a specific patient endpoint
-    // For now we will fetch from hospital patients and find ours based on email
-    // This is a temporary workaround until a dedicated patient backend is built
     fetchPatientProfile();
   }, []);
 
   const fetchPatientProfile = async () => {
     try {
       setLoading(true);
-      // Hacky workaround for now: grab all patients from hospital API, find matching email
-      // In production, we need a dedicated /api/patients/me endpoint
-      const res = await api.get('/hospitals/patients');
-      if (res.data.success) {
-        const me = res.data.data.find(p => p.email === user?.email);
-        if (me) setPatientData(me);
+
+      const [claimsRes, profileRes, slotsRes] = await Promise.all([
+        api.get('/patients/claims'),
+        api.get('/auth/profile'),
+        api.get('/patients/slots')
+      ]);
+
+      if (claimsRes.data.success && profileRes.data.success && slotsRes.data.success) {
+        const liveProfile = profileRes.data.data;
+        const allSlots = slotsRes.data.data;
+        const myBookedSlots = allSlots.filter(s => s.bookedPatients.some(p => p.patientId === user?._id || p.patientId === user?.id));
+
+        try {
+            const analyticsRes = await api.get('/patients/analytics');
+            if(analyticsRes.data.success) {
+                setAnalytics(analyticsRes.data.data);
+            }
+        } catch(e) { console.error("Analytics pull failed."); }
+
+        setPatientData({ 
+           ...user, 
+           claims: claimsRes.data.data,
+           contextStatus: liveProfile.patientDetails?.status || "Active",
+           nextCheckup: liveProfile.patientDetails?.nextCheckupDate || "Not Scheduled",
+           bookedSlots: myBookedSlots
+        });
       }
     } catch (error) {
-      console.error("Failed to load patient profile", error);
-      toast.error("Could not load your profile data");
+      console.error("Failed to load patient data", error);
+      toast.error("Could not load your dashboard data");
     } finally {
       setLoading(false);
     }
   };
 
-  // Derived dummy data since actual patient backend structure is incomplete
-  const activeClaims = 0;
-  const healthRisk = "Low Analysis";
-  const reportsCount = patientData?.reports?.length || 0;
-
-  const mockExpenses = [
-    { month: "Jan", cost: 1200 },
-    { month: "Feb", cost: 3500 },
-    { month: "Mar", cost: 800 },
-    { month: "Apr", cost: 0 },
-    { month: "May", cost: 4200 },
-    { month: "Jun", cost: 1500 },
-  ];
+  const activeClaims = patientData?.claims?.filter(c => !["Approved", "Amount Released", "Rejected"].includes(c.status)).length || 0;
+  const healthRisk = analytics.healthRisk;
+  const reportsCount = patientData?.claims?.reduce((acc, c) => acc + (c.documents?.length || 0), 0) || 0;
 
   if (loading) {
     return (
@@ -74,11 +82,22 @@ export default function PatientDashboard() {
 
   return (
     <DashboardLayout>
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-slate-900 mb-2">
-          Welcome back, {patientData?.name?.split(' ')[0] || user?.name || "Patient"} 👋
-        </h1>
-        <p className="text-slate-500">Track your health data and insurance claims from one place.</p>
+      <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-slate-900 mb-2">
+            Welcome back, {patientData?.name?.split(' ')[0] || user?.name || "Patient"} 👋
+          </h1>
+          <p className="text-slate-500">Track your health data and insurance claims from one place.</p>
+        </div>
+        <div className="flex items-center gap-3 bg-white p-3 rounded-2xl shadow-sm border border-slate-100 w-fit">
+          <div className="w-10 h-10 bg-indigo-50 text-indigo-500 rounded-xl flex items-center justify-center font-bold text-lg">
+            {patientData?.contextStatus === 'Discharged' ? '🏠' : patientData?.contextStatus === 'Pending' ? '⏳' : '🏥'}
+          </div>
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-0.5">Account Status</p>
+            <p className="font-bold text-slate-800 text-sm">{patientData?.contextStatus}</p>
+          </div>
+        </div>
       </div>
 
       {/* === KPI CARDS === */}
@@ -86,7 +105,7 @@ export default function PatientDashboard() {
         <StatCard title="Active Claims" value={activeClaims} color="text-indigo-600" icon="📊" delay={0.1} />
         <StatCard title="Health Risk" value={healthRisk} color="text-amber-500" icon="❤️" delay={0.2} />
         <StatCard title="Reports Uploaded" value={reportsCount} color="text-emerald-600" icon="📑" delay={0.3} />
-        <StatCard title="Upcoming Appts" value={0} color="text-purple-600" icon="🏥" delay={0.4} />
+        <StatCard title="Upcoming Appts" value={patientData?.bookedSlots?.length || 0} color="text-purple-600" icon="🏥" delay={0.4} />
       </div>
 
       {/* === MAIN CONTENT GRID === */}
@@ -130,7 +149,7 @@ export default function PatientDashboard() {
               </h2>
             </div>
             <ResponsiveContainer width="100%" height={250}>
-              <AreaChart data={mockExpenses} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
+              <AreaChart data={analytics.expenses.length > 0 ? analytics.expenses : [{ month: "Jan", cost: 0 }]} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
                 <defs>
                   <linearGradient id="colorCost" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#14b8a6" stopOpacity={0.3} />
@@ -163,13 +182,28 @@ export default function PatientDashboard() {
               </div>
             ) : (
               <div className="space-y-4">
-                {patientData.reports.slice(0, 3).map((report, idx) => (
+                {patientData?.claims?.map(c => c.documents).flat().filter(Boolean).slice(0, 3).map((report, idx) => (
                   <div key={idx} className="flex items-center gap-4 p-4 rounded-xl border border-slate-100 hover:border-slate-200 bg-slate-50/50 hover:bg-slate-50 transition cursor-pointer group">
-                    <div className="w-10 h-10 rounded-lg bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold shadow-sm group-hover:bg-indigo-600 group-hover:text-white transition">🏥</div>
-                    <div className="flex-1">
-                      <p className="font-bold text-slate-800 text-sm">Patient Report #{idx + 1}</p>
-                      <p className="text-xs text-slate-500 font-medium">Synced securely via connected hospital</p>
+                    <div className="w-10 h-10 rounded-lg bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold shadow-sm group-hover:bg-indigo-600 group-hover:text-white transition shrink-0">🏥</div>
+                    <div className="flex-1 truncate">
+                      <p className="font-bold text-slate-800 text-sm truncate">{report.docType}</p>
+                      <p className="text-xs text-slate-500 font-medium truncate">Synced securely via connected hospital</p>
                     </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (report.fileUrl && report.fileUrl.startsWith('mock-storage://')) {
+                          toast.info(`Simulated view: ${report.fileUrl.replace('mock-storage://', '')}`);
+                        } else if (report.fileUrl) {
+                          window.open(report.fileUrl, '_blank', 'noreferrer');
+                        } else {
+                          toast.error('No valid file URL found.');
+                        }
+                      }}
+                      className="text-xs font-bold text-indigo-600 hover:text-indigo-800 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition shrink-0"
+                    >
+                      View ↗
+                    </button>
                   </div>
                 ))}
               </div>
@@ -183,21 +217,23 @@ export default function PatientDashboard() {
           <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 relative overflow-hidden">
 
             <h2 className="font-bold text-slate-800 text-lg mb-6 flex items-center gap-2">
-              <div className="w-2 h-6 bg-rose-500 rounded-full"></div> Next Verification
+              <div className="w-2 h-6 bg-rose-500 rounded-full"></div> Next Consultation
             </h2>
 
             <div className="bg-rose-50 border border-rose-100 rounded-2xl p-5 mb-4 relative z-10">
-              <p className="text-sm font-bold text-rose-800 mb-1">Pending Approval</p>
-              <p className="text-xs font-semibold text-rose-600/70 mb-3 ml-0.5">Automated System Check</p>
+              <p className="text-sm font-bold text-rose-800 mb-1">Scheduled Date</p>
+              <p className="text-xs font-semibold text-rose-600/70 mb-3 ml-0.5">Assigned by your Hospital</p>
 
               <div className="bg-white rounded-xl p-3 border border-rose-100 flex justify-between items-center shadow-sm">
                 <div className="flex items-center gap-2 font-bold text-slate-700 text-sm">
-                  📅 Waiting
+                  📅 {patientData?.nextCheckup !== "Not Scheduled" ? new Date(patientData?.nextCheckup).toLocaleDateString() : 'None Scheduled'}
                 </div>
-                <div className="w-2 h-2 rounded-full bg-rose-400 animate-pulse"></div>
+                {patientData?.nextCheckup !== "Not Scheduled" && (
+                  <div className="w-2 h-2 rounded-full bg-rose-400 animate-pulse"></div>
+                )}
               </div>
             </div>
-            <p className="text-xs font-medium text-slate-500 px-1 text-center">Verify documents when requested</p>
+            <p className="text-xs font-medium text-slate-500 px-1 text-center">Contact your hospital for rescheduling</p>
           </motion.div>
 
           {/* Quick Actions */}
@@ -224,9 +260,11 @@ export default function PatientDashboard() {
               </button>
 
               <button
-                className="w-full bg-white text-slate-700 border-2 border-slate-200 font-bold py-3 px-4 rounded-xl hover:border-slate-300 hover:bg-slate-50 transition"
+                onClick={() => navigate("/patient/book-appointment")}
+                className="w-full bg-white text-slate-700 border-2 border-slate-200 font-bold py-3 px-4 rounded-xl hover:border-slate-300 hover:bg-slate-50 transition flex items-center justify-between group"
               >
-                Secure Vault
+                <span>Book Doctor Appointment</span>
+                <span className="opacity-50 group-hover:opacity-100 transition">→</span>
               </button>
             </div>
           </div>

@@ -12,6 +12,19 @@ const documentSchema = new mongoose.Schema({
             'Pharmacy Bill',
             'Investigation Report',
             'NEFT Details',
+
+            'Aadhaar Card (Patient ID)',
+            'PAN Card (Tax ID)',
+            'Insurance Policy Copy',
+            'Hospital Admission Note',
+            'Doctor\'s Prescription',
+            'Diagnostic Reports (Blood/Urine)',
+            'X-Ray / MRI / CT Scans',
+            'Surgery / OT Notes',
+            'Pharmacy Bills',
+            'Consumable / Equipment Bills',
+            'Pre-Authorization Form',
+            'Other / Miscellaneous',
             'Other'
         ],
         required: true
@@ -49,6 +62,7 @@ const claimSchema = new mongoose.Schema(
         status: {
             type: String,
             enum: [
+                'Pending Documents',         // Outstanding requirements before submission
                 'Initiated',                 // Hospital created the claim draft
                 'Pending Patient Consent',   // Waiting for Patient OTP approval
                 'Submitted',                 // Hospital submitted to Insurance

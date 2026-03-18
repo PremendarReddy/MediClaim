@@ -6,14 +6,18 @@ import { LogOut, User, Settings, Bell, Search, Moon, Sun } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 export default function Navbar() {
-  const {
-    notifications,
-    unreadCount,
-    markNotificationsRead,
-  } = useClaim();
+  const { notifications, markNotificationsRead } = useClaim();
 
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+
+  // Filter notifications by user role or "all"
+  const userRole = user?.role || "patient";
+  const roleNotifications = notifications.filter(
+    (n) => n.roles?.includes("all") || n.roles?.includes(userRole) || !n.roles
+  );
+  
+  const unreadCount = roleNotifications.filter((n) => !n.read).length;
 
   const [openNotif, setOpenNotif] = useState(false);
   const [openProfile, setOpenProfile] = useState(false);
@@ -42,8 +46,8 @@ export default function Navbar() {
 
   const toggleNotifications = () => {
     setOpenNotif(!openNotif);
-    if (!openNotif) {
-      markNotificationsRead();
+    if (!openNotif && unreadCount > 0) {
+      markNotificationsRead(user?.role || 'all');
       setOpenProfile(false);
     }
   };
@@ -112,7 +116,7 @@ export default function Navbar() {
                 </div>
 
                 <div className="max-h-80 overflow-y-auto p-2">
-                  {notifications.length === 0 ? (
+                  {roleNotifications.length === 0 ? (
                     <div className="text-center py-6">
                       <div className="mx-auto w-12 h-12 bg-slate-50 dark:bg-slate-700/50 rounded-full flex items-center justify-center mb-3">
                         <Bell className="w-5 h-5 text-slate-300 dark:text-slate-500" />
@@ -121,7 +125,7 @@ export default function Navbar() {
                       <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">No new notifications.</p>
                     </div>
                   ) : (
-                    notifications
+                    roleNotifications
                       .slice(-5)
                       .reverse()
                       .map((note) => (
@@ -137,7 +141,7 @@ export default function Navbar() {
                       ))
                   )}
                 </div>
-                {notifications.length > 0 && (
+                {roleNotifications.length > 0 && (
                   <div className="p-2 border-t border-slate-100 dark:border-slate-700">
                     <button className="w-full text-center text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 py-2 transition-colors">
                       View All Notifications

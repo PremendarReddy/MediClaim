@@ -5,63 +5,56 @@ import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "react-toastify";
 import { analyzeCoverage } from "../../services/agentService";
 import { Sparkles, Send } from "lucide-react";
+import api from "../../api/axios";
 
 export default function PatientInsurance() {
   const [selectedTab, setSelectedTab] = useState("coverage");
   const [insuranceData, setInsuranceData] = useState({
-    company: "Star Health Insurance",
-    insuranceId: "SH123456789",
-    policyNumber: "POL2024001",
-    status: "Active",
-    totalLimit: 500000,
-    usedAmount: 125000,
+    company: "Loading...",
+    insuranceId: "...",
+    policyNumber: "...",
+    status: "Loading...",
+    totalLimit: 0,
+    usedAmount: 0,
   });
-  const [editing, setEditing] = useState(false);
-  const [formData, setFormData] = useState({ ...insuranceData });
 
   const [aiQuery, setAiQuery] = useState("");
   const [aiResponse, setAiResponse] = useState(null);
   const [askingAi, setAskingAi] = useState(false);
 
   useEffect(() => {
-    const saved = localStorage.getItem("patientInsurance");
-    if (saved) {
-      setInsuranceData(JSON.parse(saved));
-      setFormData(JSON.parse(saved));
-    }
+    fetchInsuranceData();
   }, []);
 
-  const insuranceCompanies = [
-    "Star Health",
-    "HDFC Ergo",
-    "ICICI Lombard",
-    "Bajaj Allianz",
-    "Apollo",
-    "Others",
-  ];
-
-  const mockTreatments = [
-    { name: "In-patient Hospitalization", limit: 500000, covered: true },
-    { name: "Pre & Post Hospitalization", limit: 50000, covered: true },
-    { name: "Day Care Procedures", limit: 100000, covered: true },
-    { name: "Maternity Coverage", limit: 50000, covered: false },
-    { name: "OPD Consultation", limit: 5000, covered: false },
-  ];
-
-  const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-  };
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    setInsuranceData(formData);
-    localStorage.setItem("patientInsurance", JSON.stringify(formData));
-    toast.success("Insurance details updated successfully");
-    setEditing(false);
+  const fetchInsuranceData = async () => {
+    try {
+      const res = await api.get('/auth/profile');
+      if (res.data.success) {
+        const insDetails = res.data.data.patientDetails?.insuranceDetails;
+        if (insDetails) {
+          const limit = Number(insDetails.coverageAmount) || 0;
+          const balance = insDetails.balanceAmount !== undefined ? Number(insDetails.balanceAmount) : limit;
+          
+          const newData = {
+            company: insDetails.providerName || "N/A",
+            insuranceId: insDetails.memberId || "N/A",
+            policyNumber: insDetails.policyNumber || "N/A",
+            status: "Active",
+            totalLimit: limit,
+            usedAmount: limit > 0 ? (limit - balance) : 0,
+            validUpto: insDetails.validUpto ? new Date(insDetails.validUpto).toLocaleDateString() : "N/A",
+            insuranceDocuments: insDetails.insuranceDocuments || []
+          };
+          setInsuranceData(newData);
+        }
+      }
+    } catch(err) {
+      console.error("Failed to fetch profile", err);
+    }
   };
 
   const remainingCoverage = insuranceData.totalLimit - insuranceData.usedAmount;
-  const usagePercentage = (insuranceData.usedAmount / insuranceData.totalLimit) * 100;
+  const usagePercentage = insuranceData.totalLimit > 0 ? (insuranceData.usedAmount / insuranceData.totalLimit) * 100 : 0;
 
   const handleAskAgent = async (e) => {
     e.preventDefault();
@@ -216,7 +209,13 @@ export default function PatientInsurance() {
                       <div className="w-6 h-6 rounded-full bg-blue-50 text-blue-500 flex items-center justify-center text-xs">📋</div>
                       Treatment Eligibility
                     </h3>
-                    {mockTreatments.map((treatment) => (
+                    {[
+                        { name: "In-patient Hospitalization", limit: insuranceData.totalLimit, covered: true },
+                        { name: "Pre & Post Hospitalization", limit: insuranceData.totalLimit * 0.1, covered: true },
+                        { name: "Day Care Procedures", limit: insuranceData.totalLimit * 0.2, covered: true },
+                        { name: "Maternity Coverage", limit: insuranceData.totalLimit * 0.1, covered: true },
+                        { name: "OPD Consultation", limit: 0, covered: false }
+                      ].map((treatment) => (
                       <div
                         key={treatment.name}
                         className="bg-slate-50 border border-slate-100 rounded-2xl p-4 flex justify-between items-center group cursor-pointer hover:border-indigo-100 transition-colors"
@@ -280,7 +279,7 @@ export default function PatientInsurance() {
                 )}
 
                 {/* Insurance Details Tab */}
-                {selectedTab === "details" && !editing && (
+                {selectedTab === "details" && (
                   <motion.div key="detailsView" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} className="space-y-4">
                     <div className="bg-slate-50 rounded-2xl p-5 border border-slate-100 text-center mb-6">
                       <div className="w-16 h-16 bg-white shadow-sm border border-slate-200 rounded-2xl flex items-center justify-center text-3xl mx-auto mb-3">🏢</div>
@@ -297,92 +296,40 @@ export default function PatientInsurance() {
                         <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Member ID</span>
                         <span className="font-bold text-slate-800 font-mono text-right">{insuranceData.insuranceId}</span>
                       </div>
-                      <div className="flex justify-between items-end pt-1">
+                      <div className="flex justify-between items-end border-b border-slate-100 pb-3">
                         <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Policy No.</span>
                         <span className="font-bold text-slate-800 font-mono text-right">{insuranceData.policyNumber}</span>
                       </div>
+                      <div className="flex justify-between items-end border-b border-slate-100 pb-3 mt-3">
+                        <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Valid Upto</span>
+                        <span className="font-bold text-slate-800 text-right">{insuranceData.validUpto}</span>
+                      </div>
+                      <div className="pt-2">
+                        <span className="text-xs font-bold text-slate-400 uppercase tracking-widest block mb-2">Policy Documents</span>
+                        {insuranceData.insuranceDocuments && insuranceData.insuranceDocuments.length > 0 ? (
+                            <div className="space-y-2">
+                               {insuranceData.insuranceDocuments.map((doc, idx) => (
+                                 <a 
+                                   key={idx} 
+                                   href={doc.fileUrl} 
+                                   target="_blank" 
+                                   rel="noopener noreferrer"
+                                   className="flex items-center gap-3 bg-indigo-50 border border-indigo-100 p-3 rounded-xl hover:bg-indigo-100 transition-colors group"
+                                 >
+                                    <div className="w-8 h-8 rounded-lg bg-white shadow-sm flex items-center justify-center text-indigo-500">📄</div>
+                                    <div className="flex-1">
+                                        <p className="font-bold text-sm text-indigo-900 group-hover:text-indigo-700">{doc.docName || "Insurance Document"}</p>
+                                        <p className="text-xs text-indigo-400 font-mono">{new Date(doc.uploadedDate).toLocaleDateString()}</p>
+                                    </div>
+                                    <span className="text-indigo-500 font-bold text-xs bg-white px-2 py-1 rounded-full shadow-sm">View ↗</span>
+                                 </a>
+                               ))}
+                            </div>
+                        ) : (
+                           <p className="text-sm text-slate-500 font-medium bg-slate-50 p-4 rounded-xl border border-slate-100 border-dashed text-center">No physical documents uploaded yet.</p>
+                        )}
+                      </div>
                     </div>
-
-                    <button
-                      onClick={() => setEditing(true)}
-                      className="w-full mt-6 bg-slate-900 text-white font-bold px-4 py-3.5 rounded-xl hover:bg-slate-800 shadow-lg shadow-slate-900/20 transition-all text-sm"
-                    >
-                      Edit Policy Details
-                    </button>
-                  </motion.div>
-                )}
-
-                {/* Edit Form */}
-                {selectedTab === "details" && editing && (
-                  <motion.div key="detailsEdit" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} className="space-y-5">
-                    <h3 className="font-bold text-slate-800 pb-2 border-b border-slate-100">Edit Details</h3>
-                    <form onSubmit={handleSubmit} className="space-y-4">
-                      <div>
-                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-                          Insurance Company
-                        </label>
-                        <select
-                          name="company"
-                          value={formData.company}
-                          onChange={handleChange}
-                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
-                          required
-                        >
-                          {insuranceCompanies.map((company) => (
-                            <option key={company} value={company}>
-                              {company}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-                          Member / Insurance ID
-                        </label>
-                        <input
-                          type="text"
-                          name="insuranceId"
-                          value={formData.insuranceId}
-                          onChange={handleChange}
-                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-700 font-mono focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
-                          required
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-                          Policy Number
-                        </label>
-                        <input
-                          type="text"
-                          name="policyNumber"
-                          value={formData.policyNumber}
-                          onChange={handleChange}
-                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-700 font-mono focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
-                          required
-                        />
-                      </div>
-
-                      <div className="flex gap-3 pt-4 border-t border-slate-100">
-                        <button
-                          type="submit"
-                          className="flex-1 bg-emerald-600 text-white font-bold py-3 text-sm rounded-xl hover:bg-emerald-700 shadow-lg shadow-emerald-600/20 transition-all"
-                        >
-                          Save
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditing(false);
-                            setFormData({ ...insuranceData });
-                          }}
-                          className="flex-1 bg-slate-100 text-slate-600 font-bold py-3 text-sm rounded-xl hover:bg-slate-200 transition-all"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </form>
                   </motion.div>
                 )}
               </AnimatePresence>

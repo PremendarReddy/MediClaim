@@ -20,6 +20,14 @@ import { useNavigate } from "react-router-dom";
 
 export default function InsuranceDashboard() {
   const [claims, setClaims] = useState([]);
+  const [analytics, setAnalytics] = useState({
+    totalClaims: 0,
+    approvedClaims: 0,
+    pendingClaims: 0,
+    rejectedClaims: 0,
+    totalPaidOut: 0,
+    insuranceClaimsTrend: []
+  });
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
@@ -30,9 +38,17 @@ export default function InsuranceDashboard() {
   const fetchClaims = async () => {
     try {
       setLoading(true);
-      const res = await api.get('/hospitals/claims');
-      if (res.data.success) {
-        setClaims(res.data.data);
+      const [claimsRes, analyticsRes] = await Promise.all([
+          api.get('/hospitals/claims'),
+          api.get('/admin/analytics')
+      ]);
+
+      if (claimsRes.data.success) {
+        setClaims(claimsRes.data.data);
+      }
+      
+      if (analyticsRes.data.success) {
+        setAnalytics(analyticsRes.data.data);
       }
     } catch (error) {
       console.error(error);
@@ -42,28 +58,13 @@ export default function InsuranceDashboard() {
     }
   };
 
-  // Aggregations
-  const totalClaims = claims.length;
-  const approvedClaims = claims.filter((item) => item.status === "Approved").length;
-  const pendingClaims = claims.filter((item) => item.status.includes("Pending")).length;
-  const rejectedClaims = claims.filter((item) => item.status === "Rejected").length;
-
   const statusData = [
-    { name: "Approved", value: approvedClaims },
-    { name: "Pending", value: pendingClaims },
-    { name: "Rejected", value: rejectedClaims },
+    { name: "Approved / Paid", value: analytics.approvedClaims },
+    { name: "In Queue", value: analytics.pendingClaims },
+    { name: "Rejected", value: analytics.rejectedClaims },
   ];
 
   const COLORS = ["#10b981", "#f59e0b", "#ef4444"];
-
-  // Mock Trend since real creation dates might group up in one month
-  const insuranceClaimsTrend = [
-    { month: "Jan", claims: Math.max(10, totalClaims * 0.1) },
-    { month: "Feb", claims: Math.max(15, totalClaims * 0.2) },
-    { month: "Mar", claims: Math.max(25, totalClaims * 0.3) },
-    { month: "Apr", claims: Math.max(20, totalClaims * 0.15) },
-    { month: "May", claims: totalClaims },
-  ];
 
   if (loading) {
     return (
@@ -86,31 +87,31 @@ export default function InsuranceDashboard() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <StatCard
           title="Total Claims Received"
-          value={totalClaims}
+          value={analytics.totalClaims}
           color="text-indigo-600"
           icon="📥"
           bgColor="bg-indigo-50"
         />
         <StatCard
-          title="Approved Claims"
-          value={approvedClaims}
-          color="text-emerald-600"
-          icon="✅"
-          bgColor="bg-emerald-50"
-        />
-        <StatCard
           title="Pending Queue"
-          value={pendingClaims}
+          value={analytics.pendingClaims}
           color="text-amber-500"
           icon="⏳"
           bgColor="bg-amber-50"
         />
         <StatCard
-          title="Rejected Claims"
-          value={rejectedClaims}
-          color="text-rose-600"
-          icon="❌"
-          bgColor="bg-rose-50"
+          title="Approved Claims"
+          value={analytics.approvedClaims}
+          color="text-teal-600"
+          icon="✅"
+          bgColor="bg-teal-50"
+        />
+        <StatCard
+          title="Total Paid Out"
+          value={`₹${analytics.totalPaidOut.toLocaleString()}`}
+          color="text-emerald-600"
+          icon="💸"
+          bgColor="bg-emerald-50"
         />
       </div>
 
@@ -160,7 +161,7 @@ export default function InsuranceDashboard() {
           </h2>
           <div className="h-[280px]">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={insuranceClaimsTrend} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+              <BarChart data={analytics.insuranceClaimsTrend} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
                 <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
@@ -207,10 +208,10 @@ export default function InsuranceDashboard() {
                     </div>
                     <div className="text-right flex items-center gap-4">
                       <div>
-                        <p className="font-bold text-slate-800">₹{item.claimAmount?.toLocaleString()}</p>
+                        <p className="font-bold text-slate-800">₹{item.totalAmount?.toLocaleString()}</p>
                         <p className="text-xs font-bold text-slate-400 mt-0.5">{new Date(item.createdAt).toLocaleDateString()}</p>
                       </div>
-                      <span className={`px-3 py-1 text-xs font-bold rounded-full ${item.status === 'Approved' ? 'bg-emerald-100 text-emerald-700' :
+                      <span className={`px-3 py-1 text-xs font-bold rounded-full ${['Approved', 'Amount Released'].includes(item.status) ? 'bg-emerald-100 text-emerald-700' :
                           item.status === 'Rejected' ? 'bg-rose-100 text-rose-700' :
                             'bg-amber-100 text-amber-700'
                         }`}>
@@ -242,10 +243,7 @@ export default function InsuranceDashboard() {
               <span>→</span>
             </button>
 
-            <button className="w-full bg-purple-500/20 backdrop-blur-sm border border-purple-500/30 text-purple-100 font-bold py-3.5 rounded-xl hover:bg-purple-500/30 transition-all flex items-center justify-between px-5 mt-6">
-              <span className="flex items-center gap-2">🤖 AI Risk Panel</span>
-              <span>→</span>
-            </button>
+
           </div>
         </motion.div>
       </div>
