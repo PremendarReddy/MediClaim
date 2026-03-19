@@ -248,9 +248,6 @@ export default function AIAnalysis() {
                      <button onClick={() => setChatMode('policy')} className={`px-4 py-2 rounded-lg transition-all flex items-center gap-2 ${chatMode === 'policy' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>
                         <span>🛡️</span> Policy Details
                      </button>
-                     <button onClick={() => setChatMode('document')} className={`px-4 py-2 rounded-lg transition-all flex items-center gap-2 ${chatMode === 'document' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>
-                        <span>📄</span> Document Analysis
-                     </button>
                      <button onClick={() => setChatMode('medical')} className={`px-4 py-2 rounded-lg transition-all flex items-center gap-2 ${chatMode === 'medical' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>
                         <span>🩺</span> Medical Help
                      </button>
@@ -304,7 +301,7 @@ export default function AIAnalysis() {
                   <form onSubmit={handleSendMessage} className="relative mt-2">
                     <input
                       type="text"
-                      placeholder={chatMode === 'claims' ? "Ask about your claim status or required documents..." : chatMode === 'medical' ? "Describe your symptoms or medication..." : chatMode === 'document' ? "Ask about your uploaded records..." : "Ask what's covered under your policy..."}
+                      placeholder={chatMode === 'claims' ? "Ask about your claim status or required documents..." : chatMode === 'medical' ? "Describe your symptoms or medication..." : "Ask what's covered under your policy..."}
                       value={inputMessage}
                       onChange={(e) => setInputMessage(e.target.value)}
                       disabled={loading}

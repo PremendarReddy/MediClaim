@@ -3,8 +3,9 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { validateLoginForm } from "../../utils/formValidation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Activity, ShieldCheck, User, Shield, X } from "lucide-react";
+import { Activity, ShieldCheck, User, Shield, X, ArrowLeft } from "lucide-react";
 import { toast } from "react-toastify";
+import api from "../../api/axios";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -22,6 +23,10 @@ export default function Login() {
   const [show2FA, setShow2FA] = useState(false);
   const [tempToken, setTempToken] = useState("");
   const [otpInput, setOtpInput] = useState("");
+
+  const [viewState, setViewState] = useState("login");
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetData, setResetData] = useState({ otp: "", newPassword: "", confirmPassword: "" });
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -102,6 +107,47 @@ export default function Login() {
      }
   };
 
+  const handleForgotPassword = async (e) => {
+    e.preventDefault();
+    if (!resetEmail) return toast.error("Please enter your email.");
+    setLoading(true);
+    try {
+      const res = await api.post('/auth/forgot-password', { email: resetEmail });
+      if (res.data.success) {
+        toast.success("Verification code sent to your email!");
+        setViewState("reset");
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to send reset email.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResetPassword = async (e) => {
+    e.preventDefault();
+    if (!resetData.otp || !resetData.newPassword) return toast.error("All fields are required.");
+    if (resetData.newPassword !== resetData.confirmPassword) return toast.error("Passwords do not match.");
+    setLoading(true);
+    try {
+      const res = await api.post('/auth/reset-password', { 
+         email: resetEmail, 
+         otp: resetData.otp, 
+         newPassword: resetData.newPassword 
+      });
+      if (res.data.success) {
+        toast.success("Password reset successful! You can now sign in.");
+        setViewState("login");
+        setResetEmail("");
+        setResetData({ otp: "", newPassword: "", confirmPassword: "" });
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to reset password.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 relative overflow-hidden font-sans">
       {/* Background Orbs */}
@@ -123,99 +169,146 @@ export default function Login() {
               <Activity className="text-white w-8 h-8" />
             </div>
             <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight mb-2">
-              Welcome back
+              {viewState === "login" ? "Welcome back" : viewState === "forgot" ? "Reset Password" : "Create New Password"}
             </h1>
             <p className="text-slate-500 text-sm">
-              Enter your credentials to access your portal
+              {viewState === "login" ? "Enter your credentials to access your portal" : viewState === "forgot" ? "We'll send a 6-digit code to verify your identity" : "Enter the code sent to your email"}
             </p>
           </div>
 
-          <form onSubmit={handleLogin} className="space-y-5">
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">
-                Email Address
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <User className="h-5 w-5 text-slate-400" />
-                </div>
-                <input
-                  type="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleChange}
-                  onBlur={handleBlur}
-                  placeholder="name@company.com"
-                  className={`block w-full pl-10 pr-3 py-3 border rounded-xl leading-5 bg-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-all duration-200 ${touched.email && errors.email
-                      ? "border-red-300 focus:ring-red-500 focus:border-red-500"
-                      : "border-slate-200"
-                    }`}
-                />
-              </div>
-              {touched.email && errors.email && (
-                <motion.p initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="text-red-500 text-xs mt-1.5 font-medium">{errors.email}</motion.p>
-              )}
-            </div>
+          {viewState === "login" && (
+            <AnimatePresence mode="wait">
+              <motion.div key="login" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}>
+                <form onSubmit={handleLogin} className="space-y-5">
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">
+                      Email Address
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <User className="h-5 w-5 text-slate-400" />
+                      </div>
+                      <input
+                        type="email"
+                        name="email"
+                        value={formData.email}
+                        onChange={handleChange}
+                        onBlur={handleBlur}
+                        placeholder="name@company.com"
+                        className={`block w-full pl-10 pr-3 py-3 border rounded-xl leading-5 bg-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-all duration-200 ${touched.email && errors.email ? "border-red-300 focus:ring-red-500 focus:border-red-500" : "border-slate-200"}`}
+                      />
+                    </div>
+                    {touched.email && errors.email && (
+                      <motion.p initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="text-red-500 text-xs mt-1.5 font-medium">{errors.email}</motion.p>
+                    )}
+                  </div>
 
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="block text-sm font-semibold text-slate-700">
-                  Password
-                </label>
-                <a href="#" className="text-xs font-medium text-blue-600 hover:text-blue-500 transition-colors">
-                  Forgot password?
-                </a>
-              </div>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <ShieldCheck className="h-5 w-5 text-slate-400" />
-                </div>
-                <input
-                  type="password"
-                  name="password"
-                  value={formData.password}
-                  onChange={handleChange}
-                  onBlur={handleBlur}
-                  placeholder="••••••••"
-                  className={`block w-full pl-10 pr-3 py-3 border rounded-xl leading-5 bg-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-all duration-200 ${touched.password && errors.password
-                      ? "border-red-300 focus:ring-red-500 focus:border-red-500"
-                      : "border-slate-200"
-                    }`}
-                />
-              </div>
-              {touched.password && errors.password && (
-                <motion.p initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="text-red-500 text-xs mt-1.5 font-medium">{errors.password}</motion.p>
-              )}
-            </div>
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="block text-sm font-semibold text-slate-700">
+                        Password
+                      </label>
+                      <button type="button" onClick={() => setViewState("forgot")} className="text-xs font-medium text-blue-600 hover:text-blue-500 transition-colors">
+                        Forgot password?
+                      </button>
+                    </div>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <ShieldCheck className="h-5 w-5 text-slate-400" />
+                      </div>
+                      <input
+                        type="password"
+                        name="password"
+                        value={formData.password}
+                        onChange={handleChange}
+                        onBlur={handleBlur}
+                        placeholder="••••••••"
+                        className={`block w-full pl-10 pr-3 py-3 border rounded-xl leading-5 bg-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-all duration-200 ${touched.password && errors.password ? "border-red-300 focus:ring-red-500 focus:border-red-500" : "border-slate-200"}`}
+                      />
+                    </div>
+                    {touched.password && errors.password && (
+                      <motion.p initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="text-red-500 text-xs mt-1.5 font-medium">{errors.password}</motion.p>
+                    )}
+                  </div>
 
-            <motion.button
-              whileHover={{ scale: 1.01 }}
-              whileTap={{ scale: 0.99 }}
-              disabled={loading}
-              className="w-full flex justify-center py-3.5 px-4 border border-transparent rounded-xl shadow-md text-sm font-bold text-white bg-slate-900 hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-900 transition-colors disabled:opacity-70 disabled:cursor-not-allowed mt-4"
-            >
-              {loading ? (
-                <div className="flex items-center space-x-2">
-                  <div className="w-4 h-4 rounded-full border-2 border-white/20 border-t-white animate-spin"></div>
-                  <span>Authenticating...</span>
-                </div>
-              ) : (
-                "Sign In"
-              )}
-            </motion.button>
-          </form>
+                  <motion.button
+                    whileHover={{ scale: 1.01 }}
+                    whileTap={{ scale: 0.99 }}
+                    disabled={loading}
+                    className="w-full flex justify-center py-3.5 px-4 border border-transparent rounded-xl shadow-md text-sm font-bold text-white bg-slate-900 hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-900 transition-colors disabled:opacity-70 disabled:cursor-not-allowed mt-4"
+                  >
+                    {loading ? (
+                      <div className="flex items-center space-x-2">
+                        <div className="w-4 h-4 rounded-full border-2 border-white/20 border-t-white animate-spin"></div>
+                        <span>Authenticating...</span>
+                      </div>
+                    ) : (
+                      "Sign In"
+                    )}
+                  </motion.button>
+                </form>
 
-          <div className="mt-8 text-center border-t border-slate-100 pt-6">
-            <p className="text-sm text-slate-500">
-              Don't have an account?{' '}
-              <button
-                onClick={() => navigate('/register')}
-                className="font-bold text-blue-600 hover:text-blue-500 transition-colors"
-              >
-                Create one now
-              </button>
-            </p>
-          </div>
+                <div className="mt-8 text-center border-t border-slate-100 pt-6">
+                  <p className="text-sm text-slate-500">
+                    Don't have an account?{' '}
+                    <button
+                      type="button"
+                      onClick={() => navigate('/register')}
+                      className="font-bold text-blue-600 hover:text-blue-500 transition-colors"
+                    >
+                      Create one now
+                    </button>
+                  </p>
+                </div>
+              </motion.div>
+            </AnimatePresence>
+          )}
+
+          {viewState === "forgot" && (
+            <AnimatePresence mode="wait">
+              <motion.form key="forgot" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} onSubmit={handleForgotPassword} className="space-y-5">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Email Address</label>
+                  <input type="email" value={resetEmail} onChange={(e) => setResetEmail(e.target.value)} required placeholder="name@company.com" className="block w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white placeholder-slate-400" />
+                </div>
+                <button type="submit" disabled={loading} className="w-full flex justify-center items-center py-3.5 px-4 rounded-xl shadow-md text-sm font-bold text-white bg-slate-900 hover:bg-slate-800 focus:outline-none transition-colors disabled:opacity-70 disabled:cursor-not-allowed">
+                   {loading ? <div className="w-4 h-4 rounded-full border-2 border-white/20 border-t-white animate-spin"></div> : "Send Verification Code"}
+                </button>
+                <div className="text-center mt-6">
+                  <button type="button" onClick={() => setViewState("login")} className="text-sm text-slate-500 font-semibold hover:text-slate-700 flex justify-center items-center gap-2 mx-auto">
+                    <ArrowLeft className="w-4 h-4" /> Back to Sign In
+                  </button>
+                </div>
+              </motion.form>
+            </AnimatePresence>
+          )}
+
+          {viewState === "reset" && (
+            <AnimatePresence mode="wait">
+              <motion.form key="reset" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} onSubmit={handleResetPassword} className="space-y-5">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">6-Digit OTP</label>
+                  <input type="text" maxLength={6} value={resetData.otp} onChange={(e) => setResetData({...resetData, otp: e.target.value})} required placeholder="000000" className="block w-full px-4 py-3 border border-slate-200 rounded-xl text-center tracking-widest text-lg font-bold text-slate-700 focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white placeholder-slate-300" />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">New Password</label>
+                  <input type="password" value={resetData.newPassword} onChange={(e) => setResetData({...resetData, newPassword: e.target.value})} required placeholder="••••••••" className="block w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white placeholder-slate-400" />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Confirm New Password</label>
+                  <input type="password" value={resetData.confirmPassword} onChange={(e) => setResetData({...resetData, confirmPassword: e.target.value})} required placeholder="••••••••" className="block w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white placeholder-slate-400" />
+                </div>
+                <button type="submit" disabled={loading} className="w-full flex justify-center items-center py-3.5 px-4 rounded-xl shadow-md text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 focus:outline-none transition-colors disabled:opacity-70 disabled:cursor-not-allowed">
+                   {loading ? <div className="w-4 h-4 rounded-full border-2 border-white/20 border-t-white animate-spin"></div> : "Reset Password"}
+                </button>
+                <div className="text-center mt-6">
+                  <button type="button" onClick={() => setViewState("login")} className="text-sm text-slate-500 font-semibold hover:text-slate-700 flex justify-center items-center gap-2 mx-auto">
+                    <ArrowLeft className="w-4 h-4" /> Cancel reset
+                  </button>
+                </div>
+              </motion.form>
+            </AnimatePresence>
+          )}
         </div>
       </motion.div>
 

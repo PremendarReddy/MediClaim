@@ -92,7 +92,9 @@ const userSchema = new mongoose.Schema(
         },
         // Security Fields
         twoFactorEnabled: { type: Boolean, default: false },
-        twoFactorSecret: { type: String }
+        twoFactorSecret: { type: String },
+        resetPasswordOTP: { type: String },
+        resetPasswordExpire: { type: Date }
     },
     {
         timestamps: true,
