@@ -12,9 +12,11 @@ import {
 import { toast } from "react-toastify";
 import { motion, AnimatePresence } from "framer-motion";
 import { getMedicalInsights, generalChat } from "../../services/agentService";
-import axios from "axios";
+import api from "../../api/axios";
+import { useAuth } from "../../context/AuthContext";
 
 export default function AIAnalysis() {
+  const { user } = useAuth();
   const [selectedTab, setSelectedTab] = useState("chat");
   const [chatMode, setChatMode] = useState("policy");
   const [file, setFile] = useState(null);
@@ -22,6 +24,7 @@ export default function AIAnalysis() {
   const [result, setResult] = useState(null);
   const [history, setHistory] = useState([]);
   const [claimsData, setClaimsData] = useState([]);
+  const [profileData, setProfileData] = useState(null);
 
   const [messages, setMessages] = useState([
     {
@@ -43,17 +46,23 @@ export default function AIAnalysis() {
   }, [messages]);
 
   useEffect(() => {
-    const fetchClaims = async () => {
+    const fetchData = async () => {
       try {
-        const res = await axios.get('http://localhost:5000/api/patients/claims', { withCredentials: true });
-        if (res.data.success) {
-          setClaimsData(res.data.data);
+        const [claimsRes, profileRes] = await Promise.all([
+            api.get('/patients/claims'),
+            api.get('/auth/profile')
+        ]);
+        if (claimsRes.data.success) {
+          setClaimsData(claimsRes.data.data);
+        }
+        if (profileRes.data.success) {
+          setProfileData(profileRes.data.data);
         }
       } catch (err) {
-        console.error("Failed to fetch claims for AI context", err);
+        console.error("Failed to fetch AI context data", err);
       }
     };
-    fetchClaims();
+    fetchData();
   }, []);
 
   const handleAnalyze = async () => {
@@ -129,13 +138,25 @@ export default function AIAnalysis() {
     setLoading(true);
 
     try {
-      // Determine the context data payload based on the selected mode
-      let contextPayload = null;
-      if (chatMode === 'policy') {
-         contextPayload = "This policy covers maternity, standard hospitalization up to limit $500,000, and fully excludes dental.";
-      } else if (chatMode === 'claims') {
-         contextPayload = JSON.stringify(claimsData);
-      }
+      // Build an Omni-Context payload containing all patient information regardless of active tab
+      const coverageInfo = profileData?.patientDetails?.insuranceDetails;
+      const provider = coverageInfo?.isCustomProvider ? coverageInfo?.customProviderName : coverageInfo?.providerName;
+      
+      const policyContext = (coverageInfo && provider) ? {
+          providerName: provider,
+          coverageLimit: coverageInfo.coverageAmount,
+          policyExpiry: coverageInfo.validUpto,
+          isCustomProvider: coverageInfo.isCustomProvider
+      } : "No active policy registered.";
+
+      const masterContext = {
+          activeMode: chatMode, 
+          policyData: policyContext,
+          claimsData: claimsData || [],
+          documentsData: profileData?.patientDetails?.medicalHistory || []
+      };
+      
+      const contextPayload = JSON.stringify(masterContext);
       
       const agentResponse = await generalChat(chatMode, currentInput, contextPayload);
       
