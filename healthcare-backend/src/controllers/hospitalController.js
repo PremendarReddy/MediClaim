@@ -2,7 +2,7 @@ import User from '../models/User.js';
 import Claim from '../models/Claim.js';
 import DoctorSlot from '../models/DoctorSlot.js';
 import { generatePassword } from '../services/utils.js';
-import { sendOTPEmail, sendWelcomeEmail } from '../services/emailService.js';
+import { sendOTPEmail, sendWelcomeEmail, sendCustomInsurerNotification } from '../services/emailService.js';
 import { sendOTPSMS } from '../services/smsService.js';
 import bcrypt from 'bcryptjs';
 import { analyzeInsuranceDocument } from '../services/aiService.js';
@@ -314,6 +314,22 @@ export const createClaim = async (req, res) => {
         });
 
         // In a real app, trigger 'Claim Processing Agent' via event broker / HTTP call here
+
+        // Send email to custom insurer if applicable
+        if (patient.patientDetails?.insuranceDetails?.isCustomProvider) {
+            const { customProviderEmail, customProviderName, policyNumber } = patient.patientDetails.insuranceDetails;
+            if (customProviderEmail) {
+                // Fire-and-forget email dispatch
+                sendCustomInsurerNotification(
+                    customProviderEmail,
+                    customProviderName || "Custom Provider",
+                    patient.name,
+                    req.user.name || "MediClaim Hospital",
+                    claimNumber,
+                    policyNumber || "N/A"
+                ).catch(err => console.error("Failed to send Custom Insurer notification:", err));
+            }
+        }
 
         res.status(201).json({ success: true, data: claim });
     } catch (error) {

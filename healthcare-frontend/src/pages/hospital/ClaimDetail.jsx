@@ -18,6 +18,9 @@ export default function ClaimDetail() {
   const [docType, setDocType] = useState("ID Proof");
   const [uploadFile, setUploadFile] = useState(null);
 
+  // AI Risk State
+  const [isScanningRow, setIsScanningRow] = useState(false);
+
   useEffect(() => {
     fetchClaimDetails();
   }, [id]);
@@ -50,6 +53,25 @@ export default function ClaimDetail() {
       }
     } catch (error) {
       toast.error("Failed to update status");
+    }
+  };
+
+  const fetchRiskAnalysis = async () => {
+    setIsScanningRow(true);
+    try {
+        const res = await api.post('/agent/fraud-detection', { claimId: id });
+        if (res.data && res.data.riskLevel) {
+             toast.success("AI Intelligence Scan Complete");
+             setClaim(prev => ({ 
+                 ...prev, 
+                 aiRiskScore: res.data.riskLevel, 
+                 aiRiskExplanation: res.data.explanations[0] 
+             }));
+        }
+    } catch (err) {
+        toast.error(err.response?.data?.error || "Failed to execute AI Intelligence Scan");
+    } finally {
+        setIsScanningRow(false);
     }
   };
 
@@ -324,15 +346,23 @@ export default function ClaimDetail() {
 
             <div className="bg-black/20 rounded-2xl p-5 border border-white/5 relative z-10">
               <p className="text-sm font-semibold text-slate-400 mb-1">Assessment Level</p>
-              <p className={`font-black text-2xl tracking-wide ${claim.aiRiskScore?.level === 'High' ? 'text-rose-400' :
-                claim.aiRiskScore?.level === 'Medium' ? 'text-amber-400' : 'text-emerald-400'
+              <p className={`font-black text-2xl tracking-wide ${claim.aiRiskScore === 'HIGH' ? 'text-rose-400' :
+                claim.aiRiskScore === 'MEDIUM' ? 'text-amber-400' : 
+                claim.aiRiskScore === 'LOW' ? 'text-emerald-400' : 'text-slate-400'
                 }`}>
-                {claim.aiRiskScore?.level || "Pending Scan"}
+                {claim.aiRiskScore === 'PENDING' ? "Pending Scan" : claim.aiRiskScore}
               </p>
-              <div className="mt-4 pt-4 border-t border-white/10">
+              <div className="mt-4 pt-4 border-t border-white/10 space-y-4">
                 <p className="text-sm font-medium text-slate-300 leading-relaxed">
-                  {claim.aiRiskScore?.reason || "Neural analysis of medical documentation and billing trajectory is pending."}
+                  {claim.aiRiskExplanation || "Neural analysis of medical documentation and billing trajectory is pending."}
                 </p>
+                <button 
+                  onClick={fetchRiskAnalysis}
+                  disabled={isScanningRow}
+                  className="w-full bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 font-bold py-2.5 px-4 rounded-xl transition shadow-lg shadow-black/20 disabled:opacity-50"
+                >
+                  {isScanningRow ? "Enacting Neural Scan..." : "Generate AI Risk Report"}
+                </button>
               </div>
             </div>
           </motion.div>

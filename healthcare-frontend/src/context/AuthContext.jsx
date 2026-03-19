@@ -21,6 +21,9 @@ export const AuthProvider = ({ children }) => {
     const login = async (email, password) => {
         try {
             const response = await api.post('/auth/login', { email, password });
+            if (response.data.requires2FA) {
+                return { success: true, requires2FA: true, tempToken: response.data.tempToken };
+            }
             if (response.data.success) {
                 const userData = response.data.data;
                 setUser(userData);
@@ -28,6 +31,24 @@ export const AuthProvider = ({ children }) => {
                 return { success: true, role: userData.role };
             }
             return { success: false, error: 'Login failed' };
+        } catch (error) {
+            return {
+                success: false,
+                error: error.response?.data?.message || 'Network error occurred'
+            };
+        }
+    };
+
+    const verify2FALogin = async (tempToken, token) => {
+        try {
+            const response = await api.post('/auth/login/verify-2fa', { tempToken, token });
+            if (response.data.success) {
+                const userData = response.data.data;
+                setUser(userData);
+                localStorage.setItem('user', JSON.stringify(userData));
+                return { success: true, role: userData.role };
+            }
+            return { success: false, error: 'Invalid 2FA code' };
         } catch (error) {
             return {
                 success: false,
@@ -60,8 +81,16 @@ export const AuthProvider = ({ children }) => {
         window.location.href = '/login';
     };
 
+    const updateUserLocal = (updatedFields) => {
+        setUser((prev) => {
+            const newUser = { ...prev, ...updatedFields };
+            localStorage.setItem('user', JSON.stringify(newUser));
+            return newUser;
+        });
+    };
+
     return (
-        <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+        <AuthContext.Provider value={{ user, loading, login, verify2FALogin, register, logout, updateUserLocal }}>
             {!loading && children}
         </AuthContext.Provider>
     );

@@ -43,6 +43,10 @@ export default function AddPatient() {
     policyNumber: "",
     memberId: "",
     insuranceDocument: null,
+    customProviderName: "",
+    customProviderEmail: "",
+    customProviderPhone: "",
+    customProviderCoverage: "",
   });
 
   const handleInputChange = (e) => {
@@ -106,13 +110,25 @@ export default function AddPatient() {
       let insuranceDetailsPayload = undefined;
       
       if (formData.insuranceProvider) {
-         const selectedProvider = insuranceCompanies.find(c => c._id === formData.insuranceProvider);
-         insuranceDetailsPayload = {
-            providerId: formData.insuranceProvider,
-            providerName: selectedProvider ? selectedProvider.name : "",
-            policyNumber: formData.policyNumber,
-            memberId: formData.memberId,
-         };
+         if (formData.insuranceProvider === 'others') {
+            insuranceDetailsPayload = {
+               isCustomProvider: true,
+               customProviderName: formData.customProviderName,
+               customProviderEmail: formData.customProviderEmail,
+               customProviderPhone: formData.customProviderPhone,
+               coverageAmount: formData.customProviderCoverage,
+               policyNumber: formData.policyNumber,
+               memberId: formData.memberId,
+            };
+         } else {
+             const selectedProvider = insuranceCompanies.find(c => c._id === formData.insuranceProvider);
+             insuranceDetailsPayload = {
+                providerId: formData.insuranceProvider,
+                providerName: selectedProvider ? selectedProvider.name : "",
+                policyNumber: formData.policyNumber,
+                memberId: formData.memberId,
+             };
+         }
       }
 
       const patientDetailsPayload = {
@@ -355,11 +371,71 @@ export default function AddPatient() {
                     {insuranceCompanies.map(company => (
                        <option key={company._id} value={company._id}>{company.name}</option>
                     ))}
+                    <option value="others">Others (Custom Provider)</option>
                   </select>
                 </div>
 
                 {formData.insuranceProvider && (
                   <>
+                    {formData.insuranceProvider === 'others' && (
+                        <>
+                          <div>
+                            <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                              Insurance Company Name *
+                            </label>
+                            <input
+                              type="text"
+                              name="customProviderName"
+                              value={formData.customProviderName}
+                              onChange={handleInputChange}
+                              placeholder="e.g. Acme Health"
+                              className="w-full border border-slate-200 focus:ring-blue-500 focus:outline-none focus:ring-2 rounded-xl py-2.5 px-3"
+                              required
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                              Insurer Email Address *
+                            </label>
+                            <input
+                              type="email"
+                              name="customProviderEmail"
+                              value={formData.customProviderEmail}
+                              onChange={handleInputChange}
+                              placeholder="claims@acmehealth.com"
+                              className="w-full border border-slate-200 focus:ring-blue-500 focus:outline-none focus:ring-2 rounded-xl py-2.5 px-3"
+                              required
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                              Insurer Contact Number *
+                            </label>
+                            <input
+                              type="tel"
+                              name="customProviderPhone"
+                              value={formData.customProviderPhone}
+                              onChange={handleInputChange}
+                              placeholder="1800 123 4567"
+                              className="w-full border border-slate-200 focus:ring-blue-500 focus:outline-none focus:ring-2 rounded-xl py-2.5 px-3"
+                              required
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                              Coverage Amount (₹)
+                            </label>
+                            <input
+                              type="number"
+                              name="customProviderCoverage"
+                              value={formData.customProviderCoverage}
+                              onChange={handleInputChange}
+                              placeholder="500000"
+                              className="w-full border border-slate-200 focus:ring-blue-500 focus:outline-none focus:ring-2 rounded-xl py-2.5 px-3"
+                            />
+                          </div>
+                        </>
+                    )}
                     <div>
                       <label className="block text-sm font-semibold text-slate-700 mb-1.5">
                         Policy Number

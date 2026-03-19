@@ -2,6 +2,7 @@ import express from 'express';
 import Claim from '../models/Claim.js';
 import User from '../models/User.js';
 import { GoogleGenAI, Type } from '@google/genai';
+import Groq from 'groq-sdk';
 
 const router = express.Router();
 
@@ -157,49 +158,61 @@ ${reportText}
 // -------------------------------------------------------------
 router.post('/agent/fraud-detection', async (req, res) => {
     try {
-        const { claimId, age, claimAmount, previousClaimsCount } = req.body;
+        const { claimId } = req.body;
 
-        // Simulated ML Random Forest Logic
-        let riskScore = 0;
-        let explanations = [];
-
-        if (age < 30 && claimAmount > 500000) {
-            riskScore += 40;
-            explanations.push("Unusually high claim amount for age demographic.");
+        if (!process.env.GROQ_API_KEY) {
+            return res.status(500).json({ error: "Groq API key is missing. Cannot perform AI analysis." });
         }
 
-        if (previousClaimsCount > 3) {
-            riskScore += 30;
-            explanations.push("High frequency of claims detected.");
+        const claim = await Claim.findById(claimId).populate('patientId');
+        if (!claim) return res.status(404).json({ error: "Claim not found" });
+
+        const patient = claim.patientId;
+        const uploadCount = claim.documents?.length || 0;
+        const totalAmount = claim.totalAmount;
+        
+        let age = "Unknown";
+        if (patient?.patientDetails?.dateOfBirth) {
+            const dob = new Date(patient.patientDetails.dateOfBirth);
+            age = new Date().getFullYear() - dob.getFullYear();
         }
 
-        if (claimAmount > 1000000) {
-            riskScore += 30;
-            explanations.push("Claim amount exceeds 10L threshold.");
-        }
+        const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
-        let riskLevel = 'LOW';
-        if (riskScore >= 70) riskLevel = 'HIGH';
-        else if (riskScore >= 40) riskLevel = 'MEDIUM';
+        const systemPrompt = `You are a medical insurance fraud and risk assessment AI. Analyze the following claim data and determine the risk level. You MUST return ONLY a valid JSON object matching the requested schema. Do NOT wrap the JSON in markdown blocks or return any conversational text whatsoever. Wait, strictly follow the JSON object requirement.
 
-        // Synchronize analysis inference natively back to the Claim if ID was provided
-        if (claimId) {
-             const claim = await Claim.findById(claimId);
-             if (claim) {
-                 claim.aiRiskScore = riskLevel;
-                 claim.aiRiskExplanation = explanations.join(" | ");
-                 await claim.save();
-             }
-        }
+Data:
+- Patient Age: ${age}
+- Claim Request Amount (INR): ${totalAmount}
+- Attached Documents Count: ${uploadCount}
+
+Schema required:
+{
+  "riskLevel": "LOW", // MUST BE "LOW", "MEDIUM", or "HIGH"
+  "explanation": "A concise 1-2 sentence explanation of why this risk level was assigned based on the data points provided."
+}`;
+
+        const chatCompletion = await groq.chat.completions.create({
+            messages: [{ role: 'system', content: systemPrompt }],
+            model: 'llama-3.1-8b-instant',
+            temperature: 0.1,
+            response_format: { type: "json_object" }
+        });
+
+        const aiResponse = JSON.parse(chatCompletion.choices[0].message.content);
+
+        claim.aiRiskScore = aiResponse.riskLevel;
+        claim.aiRiskExplanation = aiResponse.explanation;
+        await claim.save();
 
         res.json({
             agent: "Fraud & Risk Detection Agent",
-            riskLevel,
-            riskScoreMetric: riskScore,
-            explanations,
-            recommendation: riskLevel === 'HIGH' ? 'Manual Investigation Required' : 'Auto-Approve Eligible'
+            riskLevel: aiResponse.riskLevel,
+            explanations: [aiResponse.explanation],
+            recommendation: aiResponse.riskLevel === 'HIGH' ? 'Manual Investigation Required' : 'Auto-Approve Eligible'
         });
     } catch (error) {
+        console.error("AI Fraud Detection Error:", error);
         res.status(500).json({ error: error.message });
     }
 });

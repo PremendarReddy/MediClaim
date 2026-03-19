@@ -31,12 +31,19 @@ export default function DoctorSlots() {
         const endpoint = user?.role?.toLowerCase() === 'hospital' ? '/hospitals/slots' : '/patients/slots';
         const res = await api.get(endpoint);
         if (res.data.success) {
-            setDoctorSlots(res.data.data);
+            // Filter historical/expired slots dynamically based on current time
+            const now = new Date();
+            const validSlots = res.data.data.filter(slot => {
+                const slotDateTime = new Date(`${slot.date}T${slot.time}:00`);
+                return slotDateTime >= now;
+            });
+
+            setDoctorSlots(validSlots);
             
             // For patients, we extract their booked slots from the data payload
             if (user?.role?.toLowerCase() === 'patient') {
                 const myBookings = [];
-                res.data.data.forEach(slot => {
+                validSlots.forEach(slot => {
                     const isBooked = slot.bookedPatients?.find(bp => bp.patientId === user._id || bp.patientEmail === user.email);
                     if (isBooked) {
                          myBookings.push(slot);

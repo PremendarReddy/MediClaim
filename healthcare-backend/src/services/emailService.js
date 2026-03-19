@@ -97,3 +97,48 @@ export const sendWelcomeEmail = async (email, hospitalName, tempPassword) => {
         return { success: false, error: err.message };
     }
 };
+
+/**
+ * Send Action Required Email to Custom External Insurance Providers
+ * @param {string} email - The external insurer email
+ * @param {string} insurerName - Name of the custom insurer
+ * @param {string} patientName - Name of the registered patient
+ * @param {string} hospitalName - Requesting hospital name
+ * @param {string} claimNumber - The newly generated MediClaim ID
+ * @param {string} policyNumber - The patient's policy identifier
+ */
+export const sendCustomInsurerNotification = async (email, insurerName, patientName, hospitalName, claimNumber, policyNumber) => {
+    try {
+        if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+            console.log(`[MOCK EMAIL] To Custom Insurer ${email}: Claim ${claimNumber} for ${patientName}`);
+            return { success: true, mock: true };
+        }
+
+        const transporter = createTransporter();
+
+        const info = await transporter.sendMail({
+            from: `"MediClaim Support" <${process.env.SMTP_USER}>`,
+            to: email,
+            subject: `Action Required: New MediClaim Initiated for ${patientName}`,
+            html: `
+                <div style="font-family: sans-serif; padding: 20px; background-color: #f8fafc; border-radius: 12px;">
+                    <h2 style="color: #1e293b;">MediClaim Verification Request</h2>
+                    <p style="color: #475569; font-size: 16px;">Dear <strong>${insurerName}</strong>,</p>
+                    <p style="color: #475569; font-size: 16px;">A new health insurance claim has been initiated by <strong>${hospitalName}</strong> for your policyholder <strong>${patientName}</strong>.</p>
+                    
+                    <div style="margin: 30px 0; padding: 20px; background-color: #ffffff; border-radius: 8px; border-left: 4px solid #3b82f6;">
+                        <p style="color: #334155; margin-bottom: 4px;"><strong>Claim Number:</strong> ${claimNumber}</p>
+                        <p style="color: #334155; margin-bottom: 4px;"><strong>Policy Number:</strong> ${policyNumber}</p>
+                    </div>
+
+                    <p style="color: #475569; font-size: 14px;">Please log in to your external provider dashboard or contact the hospital directly to process this verification.</p>
+                </div>
+            `,
+        });
+
+        return { success: true, messageId: info.messageId };
+    } catch (err) {
+        console.error('Failed to send Custom Insurer email via Nodemailer:', err);
+        return { success: false, error: err.message };
+    }
+};

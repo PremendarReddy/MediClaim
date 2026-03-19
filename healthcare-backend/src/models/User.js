@@ -67,6 +67,10 @@ const userSchema = new mongoose.Schema(
                 coverageAmount: Number,
                 balanceAmount: Number,
                 memberId: String,
+                isCustomProvider: { type: Boolean, default: false },
+                customProviderName: String,
+                customProviderEmail: String,
+                customProviderPhone: String,
                 insuranceDocuments: [{
                     docName: String,
                     fileUrl: String,
@@ -85,7 +89,10 @@ const userSchema = new mongoose.Schema(
             licenseNumber: String,
             supportEmail: String,
             verified: { type: Boolean, default: false }
-        }
+        },
+        // Security Fields
+        twoFactorEnabled: { type: Boolean, default: false },
+        twoFactorSecret: { type: String }
     },
     {
         timestamps: true,

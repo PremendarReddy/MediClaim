@@ -2,13 +2,13 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { validateLoginForm } from "../../utils/formValidation";
-import { motion } from "framer-motion";
-import { Activity, ShieldCheck, User } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Activity, ShieldCheck, User, Shield, X } from "lucide-react";
 import { toast } from "react-toastify";
 
 export default function Login() {
   const navigate = useNavigate();
-  const { login } = useAuth(); // Using real API context
+  const { login, verify2FALogin } = useAuth(); // Using real API context
 
   const [formData, setFormData] = useState({
     email: "",
@@ -18,6 +18,10 @@ export default function Login() {
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
   const [loading, setLoading] = useState(false);
+  
+  const [show2FA, setShow2FA] = useState(false);
+  const [tempToken, setTempToken] = useState("");
+  const [otpInput, setOtpInput] = useState("");
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -59,24 +63,43 @@ export default function Login() {
 
     setLoading(false);
 
+    if (result.requires2FA) {
+       toast.info("Two-Factor Authentication required.");
+       setTempToken(result.tempToken);
+       setShow2FA(true);
+       return;
+    }
+
     if (result.success) {
       toast.success("Login successful!");
-
       const role = result.role.toLowerCase();
-      if (role === "hospital") {
-        navigate("/hospital/dashboard");
-      } else if (role === "patient") {
-        navigate("/patient/dashboard");
-      } else if (role === "insurance") {
-        navigate("/insurance/dashboard");
-      } else if (role === "admin") {
-        navigate("/admin/dashboard");
-      } else {
-        navigate("/");
-      }
+      if (role === "hospital") navigate("/hospital/dashboard");
+      else if (role === "patient") navigate("/patient/dashboard");
+      else if (role === "insurance") navigate("/insurance/dashboard");
+      else if (role === "admin") navigate("/admin/dashboard");
+      else navigate("/");
     } else {
       toast.error(result.error || "Failed to login. Please check credentials.");
     }
+  };
+
+  const handle2FASubmit = async () => {
+     setLoading(true);
+     const result = await verify2FALogin(tempToken, otpInput);
+     setLoading(false);
+     
+     if (result.success) {
+        setShow2FA(false);
+        toast.success("Login successful!");
+        const role = result.role.toLowerCase();
+        if (role === "hospital") navigate("/hospital/dashboard");
+        else if (role === "patient") navigate("/patient/dashboard");
+        else if (role === "insurance") navigate("/insurance/dashboard");
+        else if (role === "admin") navigate("/admin/dashboard");
+        else navigate("/");
+     } else {
+        toast.error(result.error || "Invalid 2FA token.");
+     }
   };
 
   return (
@@ -195,6 +218,46 @@ export default function Login() {
           </div>
         </div>
       </motion.div>
+
+      {/* 2FA Interception Modal */}
+      <AnimatePresence>
+        {show2FA && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }} 
+              animate={{ scale: 1, opacity: 1 }} 
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white dark:bg-slate-800 rounded-3xl p-8 max-w-sm w-full shadow-2xl relative"
+            >
+              <button onClick={() => setShow2FA(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-white">
+                <X className="w-6 h-6" />
+              </button>
+              
+              <div className="text-center mb-6">
+                 <Shield className="w-12 h-12 text-blue-500 mx-auto mb-4" />
+                 <h2 className="text-2xl font-bold text-slate-800 dark:text-white">Enter 2FA Code</h2>
+                 <p className="text-slate-500 dark:text-slate-400 text-sm mt-2">Open your Authenticator app and enter the 6-digit code.</p>
+              </div>
+
+              <div className="space-y-4">
+                 <div>
+                    <input 
+                      type="text" 
+                      placeholder="000000"
+                      maxLength={6}
+                      value={otpInput}
+                      onChange={(e) => setOtpInput(e.target.value)}
+                      className="w-full text-center tracking-[0.5em] text-2xl font-black py-4 rounded-xl border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/50 dark:text-white focus:ring-blue-500 focus:border-blue-500"
+                    />
+                 </div>
+                 <button onClick={handle2FASubmit} disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl shadow-lg shadow-blue-200 dark:shadow-none transition-all disabled:opacity-70 disabled:cursor-not-allowed">
+                    {loading ? "Verifying..." : "Sign In"}
+                 </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
