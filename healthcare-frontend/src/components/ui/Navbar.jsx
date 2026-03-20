@@ -2,10 +2,10 @@ import { useState, useEffect } from "react";
 import { useClaim } from "../../context/ClaimContext";
 import { useAuth } from "../../context/AuthContext";
 import { useNavigate, Link } from "react-router-dom";
-import { LogOut, User, Settings, Bell, Search, Moon, Sun } from "lucide-react";
+import { LogOut, User, Settings, Bell, Search, Moon, Sun, Menu } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
-export default function Navbar() {
+export default function Navbar({ toggleSidebar }) {
   const { notifications, markNotificationsRead } = useClaim();
 
   const { user, logout } = useAuth();
@@ -59,11 +59,20 @@ export default function Navbar() {
 
 
   return (
-    <div className="flex justify-between items-center bg-white/80 backdrop-blur-md dark:bg-slate-900/80 dark:border-slate-800 px-6 py-4 shadow-sm border-b border-slate-200 z-40 sticky top-0 transition-colors">
+    <div className="flex justify-between items-center bg-white/80 backdrop-blur-md dark:bg-slate-900/80 dark:border-slate-800 px-6 py-4 shadow-sm border-b border-slate-200 z-40 sticky top-0 transition-colors w-full">
 
-      {/* Search */}
-      <div className="relative w-64 md:w-80 group">
-        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+      <div className="flex items-center gap-4">
+        {/* Hamburger Menu Toggle */}
+        <button 
+          onClick={toggleSidebar}
+          className="p-2 -ml-2 rounded-xl text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 dark:text-slate-400 dark:hover:bg-slate-800 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+        >
+          <Menu className="w-6 h-6" />
+        </button>
+
+        {/* Search */}
+        <div className="relative w-64 md:w-80 group hidden sm:block">
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
           <Search className="h-4 w-4 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
         </div>
         <input
@@ -71,6 +80,7 @@ export default function Navbar() {
           placeholder="Search patients, claims, IDs..."
           className="block w-full pl-10 pr-3 py-2 border border-slate-200 rounded-xl leading-5 bg-slate-50 dark:bg-slate-800 dark:border-slate-700 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 focus:bg-white transition-all text-sm"
         />
+      </div>
       </div>
 
       {/* Right Section */}

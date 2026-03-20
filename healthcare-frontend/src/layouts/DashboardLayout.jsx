@@ -56,13 +56,23 @@ export default function DashboardLayout({ children, role }) {
   };
 
   const layoutRole = role || inferRoleFromPath(pathname) || user?.role || "patient";
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar role={layoutRole} />
+    <div className="flex min-h-screen relative overflow-x-hidden">
+      
+      {/* Sidebar Overlay */}
+      {isSidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 transition-opacity" 
+          onClick={() => setIsSidebarOpen(false)}
+        ></div>
+      )}
 
-      <div className="flex-1 bg-gray-100">
-        <Navbar />
+      <Sidebar role={layoutRole} isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />
+
+      <div className="flex-1 bg-gray-100 flex flex-col w-full min-h-screen">
+        <Navbar toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
         <div className="p-6">{children}</div>
 
         {showToast && latestNotification && (
