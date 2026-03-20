@@ -135,22 +135,17 @@ export const approveClaim = async (req, res) => {
         }
 
         const otpKey = `claim_${claim._id}_${req.user._id}`;
-        // Development bypass
-        const isDevBypass = process.env.NODE_ENV === 'development' && otp === '123456';
+        const storedOtpData = otpStore.get(otpKey);
 
-        if (!isDevBypass) {
-            const storedOtpData = otpStore.get(otpKey);
-
-            if (!storedOtpData) {
-                return res.status(400).json({ success: false, message: 'OTP flow not initiated or expired.' });
-            }
-            if (Date.now() > storedOtpData.expiresAt) {
-                otpStore.delete(otpKey);
-                return res.status(400).json({ success: false, message: 'OTP expired. Please request a new one.' });
-            }
-            if (storedOtpData.otp !== otp) {
-                return res.status(400).json({ success: false, message: 'Invalid OTP provided.' });
-            }
+        if (!storedOtpData) {
+            return res.status(400).json({ success: false, message: 'OTP flow not initiated or expired.' });
+        }
+        if (Date.now() > storedOtpData.expiresAt) {
+            otpStore.delete(otpKey);
+            return res.status(400).json({ success: false, message: 'OTP expired. Please request a new one.' });
+        }
+        if (storedOtpData.otp !== otp) {
+            return res.status(400).json({ success: false, message: 'Invalid OTP provided.' });
         }
 
         // Clear OTP after success

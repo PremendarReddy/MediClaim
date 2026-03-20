@@ -70,20 +70,15 @@ export const registerPatient = async (req, res) => {
         // Verify OTP
         const storedOtpData = otpStore.get(email);
 
-        // Development bypass
-        const isDevBypass = process.env.NODE_ENV === 'development' && otp === '123456';
-
-        if (!isDevBypass) {
-            if (!storedOtpData) {
-                return res.status(400).json({ success: false, message: 'OTP flow not initiated or expired.' });
-            }
-            if (Date.now() > storedOtpData.expiresAt) {
-                otpStore.delete(email);
-                return res.status(400).json({ success: false, message: 'OTP expired. Please send a new one.' });
-            }
-            if (storedOtpData.otp !== otp) {
-                return res.status(400).json({ success: false, message: 'Invalid OTP provided.' });
-            }
+        if (!storedOtpData) {
+            return res.status(400).json({ success: false, message: 'OTP flow not initiated or expired.' });
+        }
+        if (Date.now() > storedOtpData.expiresAt) {
+            otpStore.delete(email);
+            return res.status(400).json({ success: false, message: 'OTP expired. Please send a new one.' });
+        }
+        if (storedOtpData.otp !== otp) {
+            return res.status(400).json({ success: false, message: 'Invalid OTP provided.' });
         }
 
         // OTP verifed successfully. Clear it.
@@ -204,20 +199,17 @@ export const createClaim = async (req, res) => {
 
         // Verify OTP
         const otpKey = `initiate_claim_${patientId}`;
-        const isDevBypass = process.env.NODE_ENV === 'development' && otp === '123456';
-
-        if (!isDevBypass) {
-            const storedOtpData = otpStore.get(otpKey);
-            if (!storedOtpData) {
-                return res.status(400).json({ success: false, message: 'OTP flow not initiated or expired.' });
-            }
-            if (Date.now() > storedOtpData.expiresAt) {
-                otpStore.delete(otpKey);
-                return res.status(400).json({ success: false, message: 'OTP expired. Please send a new one.' });
-            }
-            if (storedOtpData.otp !== otp) {
-                return res.status(400).json({ success: false, message: 'Invalid OTP provided.' });
-            }
+        const storedOtpData = otpStore.get(otpKey);
+        
+        if (!storedOtpData) {
+            return res.status(400).json({ success: false, message: 'OTP flow not initiated or expired.' });
+        }
+        if (Date.now() > storedOtpData.expiresAt) {
+            otpStore.delete(otpKey);
+            return res.status(400).json({ success: false, message: 'OTP expired. Please send a new one.' });
+        }
+        if (storedOtpData.otp !== otp) {
+            return res.status(400).json({ success: false, message: 'Invalid OTP provided.' });
         }
 
         // OTP verified successfully. Clear it.

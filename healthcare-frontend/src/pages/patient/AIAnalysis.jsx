@@ -30,7 +30,7 @@ export default function AIAnalysis() {
     {
       id: 1,
       type: "bot",
-      text: "Hello! I'm your Nexus AI Claim Agent. I can help you with:\n• Understanding your medical reports\n• Analyzing claim documents\n• Answering insurance questions\n• Checking claim eligibility\n\nWhat would you like help with?",
+      text: "Hello! I'm your AI MediClaim Agent. I can help you with:\n• Understanding your medical reports\n• Analyzing claim documents\n• Answering insurance questions\n• Checking claim eligibility\n\nWhat would you like help with?",
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     },
   ]);
@@ -49,8 +49,8 @@ export default function AIAnalysis() {
     const fetchData = async () => {
       try {
         const [claimsRes, profileRes] = await Promise.all([
-            api.get('/patients/claims'),
-            api.get('/auth/profile')
+          api.get('/patients/claims'),
+          api.get('/auth/profile')
         ]);
         if (claimsRes.data.success) {
           setClaimsData(claimsRes.data.data);
@@ -73,7 +73,7 @@ export default function AIAnalysis() {
     try {
       // Simulate reading the file text by just passing the file name for the NLP mock
       const simulatedFileContentText = `Patient uploaded a document named ${file.name}. It contains test results for glucose and blood pressure.`;
-      
+
       const agentResponse = await getMedicalInsights(simulatedFileContentText);
 
       if (agentResponse.success) {
@@ -113,8 +113,8 @@ export default function AIAnalysis() {
         toast.error("AI Analysis failed.");
       }
     } catch (error) {
-       console.error("Agent 3 Error", error);
-       toast.error("Failed to analyze document.");
+      console.error("Agent 3 Error", error);
+      toast.error("Failed to analyze document.");
     } finally {
       setLoading(false);
     }
@@ -132,7 +132,7 @@ export default function AIAnalysis() {
       text: currentInput,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
-    
+
     setMessages((prev) => [...prev, userMsg]);
     setInputMessage("");
     setLoading(true);
@@ -141,29 +141,29 @@ export default function AIAnalysis() {
       // Build an Omni-Context payload containing all patient information regardless of active tab
       const coverageInfo = profileData?.patientDetails?.insuranceDetails;
       const provider = coverageInfo?.isCustomProvider ? coverageInfo?.customProviderName : coverageInfo?.providerName;
-      
+
       const policyContext = (coverageInfo && provider) ? {
-          providerName: provider,
-          coverageLimit: coverageInfo.coverageAmount,
-          policyExpiry: coverageInfo.validUpto,
-          isCustomProvider: coverageInfo.isCustomProvider
+        providerName: provider,
+        coverageLimit: coverageInfo.coverageAmount,
+        policyExpiry: coverageInfo.validUpto,
+        isCustomProvider: coverageInfo.isCustomProvider
       } : "No active policy registered.";
 
       const masterContext = {
-          activeMode: chatMode, 
-          policyData: policyContext,
-          claimsData: claimsData || [],
-          documentsData: profileData?.patientDetails?.medicalHistory || []
+        activeMode: chatMode,
+        policyData: policyContext,
+        claimsData: claimsData || [],
+        documentsData: profileData?.patientDetails?.medicalHistory || []
       };
-      
+
       const contextPayload = JSON.stringify(masterContext);
-      
+
       const agentResponse = await generalChat(chatMode, currentInput, contextPayload);
-      
+
       if (agentResponse.success) {
-        let botText = typeof agentResponse.data === 'string' 
-           ? agentResponse.data 
-           : agentResponse.data.queryAnswer || "I've processed your query.";
+        let botText = typeof agentResponse.data === 'string'
+          ? agentResponse.data
+          : agentResponse.data.queryAnswer || "I've processed your query.";
 
         // Add Bot message
         const botMsg = {
@@ -175,16 +175,16 @@ export default function AIAnalysis() {
         setMessages((prev) => [...prev, botMsg]);
       }
     } catch (error) {
-       console.error("Agent 5 Error", error);
-       const errorMsg = {
-          id: Date.now() + 1,
-          type: "bot",
-          text: "I'm sorry, I'm having trouble connecting to the insurance knowledge base right now.",
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-       };
-       setMessages((prev) => [...prev, errorMsg]);
+      console.error("Agent 5 Error", error);
+      const errorMsg = {
+        id: Date.now() + 1,
+        type: "bot",
+        text: "I'm sorry, I'm having trouble connecting to the insurance knowledge base right now.",
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      };
+      setMessages((prev) => [...prev, errorMsg]);
     } finally {
-       setLoading(false);
+      setLoading(false);
     }
   };
 
@@ -206,8 +206,8 @@ export default function AIAnalysis() {
           <button
             onClick={() => setSelectedTab("chat")}
             className={`w-full text-left px-5 py-4 rounded-2xl font-bold transition-all flex items-center gap-3 ${selectedTab === "chat"
-                ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/20"
-                : "text-slate-600 hover:bg-slate-50 border border-transparent hover:border-slate-100"
+              ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/20"
+              : "text-slate-600 hover:bg-slate-50 border border-transparent hover:border-slate-100"
               }`}
           >
             <span>💬</span> Intelligent Chat
@@ -215,8 +215,8 @@ export default function AIAnalysis() {
           <button
             onClick={() => setSelectedTab("analyze")}
             className={`w-full text-left px-5 py-4 rounded-2xl font-bold transition-all flex items-center gap-3 ${selectedTab === "analyze"
-                ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/20"
-                : "text-slate-600 hover:bg-slate-50 border border-transparent hover:border-slate-100"
+              ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/20"
+              : "text-slate-600 hover:bg-slate-50 border border-transparent hover:border-slate-100"
               }`}
           >
             <span>📊</span> Document Analysis
@@ -224,8 +224,8 @@ export default function AIAnalysis() {
           <button
             onClick={() => setSelectedTab("history")}
             className={`w-full text-left px-5 py-4 rounded-2xl font-bold transition-all flex items-center gap-3 ${selectedTab === "history"
-                ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/20"
-                : "text-slate-600 hover:bg-slate-50 border border-transparent hover:border-slate-100"
+              ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/20"
+              : "text-slate-600 hover:bg-slate-50 border border-transparent hover:border-slate-100"
               }`}
           >
             <span>📜</span> Query History
@@ -238,19 +238,19 @@ export default function AIAnalysis() {
             {/* Chat Agent Tab */}
             {selectedTab === "chat" && (
               <motion.div key="chat" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="flex flex-col h-[600px] bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden relative">
-                
+
                 {/* Mode Selector Header */}
                 <div className="bg-slate-50 border-b border-slate-100 p-3 flex justify-center overflow-x-auto hide-scrollbar">
                   <div className="bg-white p-1 rounded-xl shadow-sm border border-slate-100 flex inline-flex text-xs font-bold min-w-max">
-                     <button onClick={() => setChatMode('claims')} className={`px-4 py-2 rounded-lg transition-all flex items-center gap-2 ${chatMode === 'claims' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>
-                        <span>📋</span> Claims Assistance
-                     </button>
-                     <button onClick={() => setChatMode('policy')} className={`px-4 py-2 rounded-lg transition-all flex items-center gap-2 ${chatMode === 'policy' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>
-                        <span>🛡️</span> Policy Details
-                     </button>
-                     <button onClick={() => setChatMode('medical')} className={`px-4 py-2 rounded-lg transition-all flex items-center gap-2 ${chatMode === 'medical' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>
-                        <span>🩺</span> Medical Help
-                     </button>
+                    <button onClick={() => setChatMode('claims')} className={`px-4 py-2 rounded-lg transition-all flex items-center gap-2 ${chatMode === 'claims' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>
+                      <span>📋</span> Claims Assistance
+                    </button>
+                    <button onClick={() => setChatMode('policy')} className={`px-4 py-2 rounded-lg transition-all flex items-center gap-2 ${chatMode === 'policy' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>
+                      <span>🛡️</span> Policy Details
+                    </button>
+                    <button onClick={() => setChatMode('medical')} className={`px-4 py-2 rounded-lg transition-all flex items-center gap-2 ${chatMode === 'medical' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>
+                      <span>🩺</span> Medical Help
+                    </button>
                   </div>
                 </div>
 
@@ -269,8 +269,8 @@ export default function AIAnalysis() {
                         )}
                         <div
                           className={`px-5 py-3.5 rounded-2xl shadow-sm ${msg.type === "user"
-                              ? "bg-indigo-600 text-white rounded-br-sm"
-                              : "bg-white text-slate-800 rounded-bl-sm border border-slate-100"
+                            ? "bg-indigo-600 text-white rounded-br-sm"
+                            : "bg-white text-slate-800 rounded-bl-sm border border-slate-100"
                             }`}
                         >
                           <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.text}</p>
@@ -473,10 +473,10 @@ export default function AIAnalysis() {
                           </div>
                           <span
                             className={`px-3 py-1 rounded-full text-xs font-bold ${analysis.risk === "Low"
-                                ? "bg-emerald-100 text-emerald-700"
-                                : analysis.risk === "Medium"
-                                  ? "bg-amber-100 text-amber-700"
-                                  : "bg-rose-100 text-rose-700"
+                              ? "bg-emerald-100 text-emerald-700"
+                              : analysis.risk === "Medium"
+                                ? "bg-amber-100 text-amber-700"
+                                : "bg-rose-100 text-rose-700"
                               }`}
                           >
                             Risk: {analysis.risk}
