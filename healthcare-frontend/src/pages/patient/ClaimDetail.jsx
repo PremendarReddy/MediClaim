@@ -23,6 +23,11 @@ export default function PatientClaimDetail() {
   const [otp, setOtp] = useState("");
   const [otpVerifying, setOtpVerifying] = useState(false);
 
+  // Withdraw State
+  const [withdrawOtpSent, setWithdrawOtpSent] = useState(false);
+  const [withdrawOtp, setWithdrawOtp] = useState("");
+  const [isWithdrawing, setIsWithdrawing] = useState(false);
+
   useEffect(() => {
     fetchClaimData();
   }, [id]);
@@ -108,6 +113,39 @@ export default function PatientClaimDetail() {
       toast.error(error.response?.data?.message || "Invalid or Expired OTP");
     } finally {
       setOtpVerifying(false);
+    }
+  };
+
+  const handleSendWithdrawOTP = async () => {
+    try {
+      setIsWithdrawing(true);
+      const res = await api.post(`/patients/claims/${claim._id}/send-withdraw-otp`);
+      if (res.data.success) {
+        toast.info(res.data.message);
+        setWithdrawOtpSent(true);
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Failed to send withdrawal OTP");
+    } finally {
+      setIsWithdrawing(false);
+    }
+  };
+
+  const handleWithdrawSubmit = async () => {
+    if (!withdrawOtp) return toast.warning("Please enter the OTP");
+    try {
+      setIsWithdrawing(true);
+      const res = await api.put(`/patients/claims/${claim._id}/withdraw`, { otp: withdrawOtp });
+      if (res.data.success) {
+        toast.success("Claim successfully withdrawn.");
+        setClaim(res.data.data);
+        setWithdrawOtpSent(false);
+        setWithdrawOtp("");
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Failed to verify OTP or withdraw claim");
+    } finally {
+      setIsWithdrawing(false);
     }
   };
 
@@ -276,28 +314,29 @@ export default function PatientClaimDetail() {
               <div className="w-2 h-6 bg-indigo-400 rounded-full"></div> Claim Processing Timeline
             </h2>
             <div className="pl-4 border-l-2 border-indigo-100 space-y-8 relative">
-              {statuses.map((statusTitle, idx) => {
-                const isPast = currentIndex > idx;
-                const isActive = currentIndex === idx;
-
+              {((claim.history && claim.history.length > 0) ? claim.history : [{ status: 'Initiated', updatedAt: claim.createdAt }]).map((step, index) => {
+                const isRejected = step.status === 'Rejected';
                 return (
-                  <div key={statusTitle} className="relative">
-                    <div className={`absolute -left-[25px] w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs ring-4 ring-white ${isPast ? "bg-emerald-500 text-white" : isActive ? "bg-indigo-600 text-white animate-pulse" : "bg-slate-200 text-slate-400"
-                      }`}>
-                      {isPast ? "✓" : isActive ? "⏳" : idx + 1}
+                  <div key={index} className="relative">
+                    <div className={`absolute -left-[27px] w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs ring-4 ring-white shadow-sm ${isRejected ? 'bg-rose-500 text-white' : 'bg-indigo-600 text-white'}`}>
+                      {index + 1}
                     </div>
-                    <div className={`pl-2 ${isActive ? "-mt-1" : ""}`}>
-                      <p className={`font-bold ${isPast ? "text-emerald-700" : isActive ? "text-indigo-700 text-lg" : "text-slate-500"}`}>
-                        {statusTitle}
+                    <div className="pl-2">
+                      <p className={`font-bold text-lg ${isRejected ? 'text-rose-700' : 'text-indigo-700'}`}>
+                        {step.status}
                       </p>
-                      {isActive && (
-                        <p className="text-sm font-medium text-slate-500 mt-1">
-                          Currently being processed by the system.
-                        </p>
+                      <p className="text-sm font-medium text-slate-500 mt-1">
+                        {new Date(step.updatedAt || claim.createdAt).toLocaleString()}
+                      </p>
+                      {step.comment && (
+                        <div className={`mt-3 p-3 rounded-xl border text-sm font-medium ${isRejected ? 'bg-rose-100 text-rose-900 border-rose-200 shadow-sm' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
+                          {isRejected && <span className="block font-bold uppercase tracking-wider text-[10px] mb-1 text-rose-800 opacity-70">Rejection Details</span>}
+                          {step.comment}
+                        </div>
                       )}
                     </div>
                   </div>
-                )
+                );
               })}
             </div>
           </motion.div>
@@ -367,20 +406,15 @@ export default function PatientClaimDetail() {
                     className="w-full bg-white border border-rose-200 rounded-xl py-2 px-3 text-sm font-medium focus:ring-2 focus:ring-rose-400 focus:outline-none disabled:bg-slate-50 disabled:cursor-not-allowed"
                   >
                     <option value="Aadhaar Card (Patient ID)">Aadhaar Card (Patient ID)</option>
-                    <option value="" disabled>-- Document Category --</option>
-                    <option value="Aadhaar / Voter ID">Aadhaar / Voter ID</option>
-                    <option value="PAN Card">PAN Card</option>
-                    <option value="Insurance Policy Copy">Insurance Policy Copy</option>
-                    <option value="Hospital Admission Note">Hospital Admission Note</option>
-                    <option value="Doctor Prescription">Doctor's Prescription</option>
-                    <option value="Diagnostic Report">Diagnostic Report</option>
-                    <option value="Radiology (X-Ray/MRI/CT)">Radiology (X-Ray/MRI/CT)</option>
-                    <option value="Surgery / OT Notes">Surgery / Operation Notes</option>
-                    <option value="Discharge Summary">Discharge Summary</option>
-                    <option value="Pharmacy & Consumable Bills">Pharmacy & Consumable Bills</option>
-                    <option value="Pre-Authorization Form">Pre-Authorization Form</option>
+                    <option value="" disabled>-- Mandatory Requirement --</option>
                     <option value="Claim Form">Claim Form (Filled)</option>
-                    <option value="Other Medical Record">Other Medical Record</option>
+                    <option value="ID Proof">ID Proof (Aadhaar/PAN/Voter)</option>
+                    <option value="Policy Card">Insurance Policy Card</option>
+                    <option value="Prescription">Doctor's Prescription</option>
+                    <option value="Discharge Summary">Discharge Summary</option>
+                    <option value="Pharmacy Bill">Pharmacy & Consumables Bill</option>
+                    <option value="Investigation Report">Investigation Report (Labs/Scans)</option>
+                    <option value="NEFT Details">Bank NEFT Details (Passbook/Cheque)</option>
                   </select>
                 </div>
 
@@ -464,6 +498,43 @@ export default function PatientClaimDetail() {
               </p>
             </motion.div>
           )}
+
+          {/* Withdrawal Panel */}
+          {!['Withdrawn', 'Approved', 'Amount Released', 'Rejected'].includes(claim.status) && (
+             <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 relative overflow-hidden mt-6">
+                <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                  <div className="w-2 h-6 bg-rose-500 rounded-full"></div> Withdraw Claim
+                </h2>
+                {!withdrawOtpSent ? (
+                  <button
+                    onClick={handleSendWithdrawOTP}
+                    disabled={isWithdrawing}
+                    className="w-full bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 font-bold px-4 py-3 rounded-xl transition shadow-sm disabled:opacity-50"
+                  >
+                    {isWithdrawing ? "Processing..." : "Initiate Withdrawal"}
+                  </button>
+                ) : (
+                  <div className="space-y-4">
+                    <p className="text-xs font-bold text-slate-500">An OTP was sent to your email. Enter to confirm withdrawal:</p>
+                    <input
+                      type="text"
+                      placeholder="6-digit OTP"
+                      value={withdrawOtp}
+                      onChange={(e) => setWithdrawOtp(e.target.value)}
+                      className="w-full border border-slate-200 rounded-xl py-2.5 px-3 text-center tracking-widest font-mono focus:ring-2 focus:ring-rose-400 focus:outline-none"
+                    />
+                    <button
+                      onClick={handleWithdrawSubmit}
+                      disabled={isWithdrawing}
+                      className="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold py-3 rounded-xl shadow-lg shadow-rose-600/20 transition disabled:opacity-50"
+                    >
+                      {isWithdrawing ? "Verifying..." : "Confirm Final Withdrawal"}
+                    </button>
+                  </div>
+                )}
+             </motion.div>
+          )}
+
         </div>
       </div>
           </>

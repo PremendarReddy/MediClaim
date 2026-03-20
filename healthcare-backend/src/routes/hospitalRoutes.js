@@ -1,5 +1,5 @@
 import express from 'express';
-import { registerPatient, getHospitalPatients, createClaim, getHospitalClaims, getClaimById, updateClaimStatus, sendPatientOTP, getInsuranceCompanies, sendClaimInitiationOTP, addDoctorSlot, getHospitalSlots, updatePatientDetails, getHospitalAnalytics, uploadPatientDocument, uploadMissingDocumentHospital } from '../controllers/hospitalController.js';
+import { registerPatient, getHospitalPatients, createClaim, getHospitalClaims, getClaimById, updateClaimStatus, sendPatientOTP, getInsuranceCompanies, sendClaimInitiationOTP, addDoctorSlot, getHospitalSlots, updatePatientDetails, getHospitalAnalytics, uploadPatientDocument, uploadMissingDocumentHospital, sendHospitalWithdrawOTP, hospitalWithdrawClaim } from '../controllers/hospitalController.js';
 import { protect, authorize } from '../middleware/authMiddleware.js';
 import { upload } from '../middleware/uploadMiddleware.js';
 
@@ -40,5 +40,11 @@ router.route('/claims/:id/documents')
 
 router.route('/claims/:id/status')
     .put(protect, authorize('INSURANCE', 'ADMIN', 'HOSPITAL'), updateClaimStatus);
+
+router.route('/claims/:id/send-withdraw-otp')
+    .post(protect, authorize('HOSPITAL'), sendHospitalWithdrawOTP);
+
+router.route('/claims/:id/withdraw')
+    .put(protect, authorize('HOSPITAL'), hospitalWithdrawClaim);
 
 export default router;

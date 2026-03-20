@@ -324,7 +324,7 @@ export default function InsuranceClaimDetail() {
         <span className="font-bold text-slate-400 uppercase text-xs tracking-wider mr-auto hidden sm:block">Decision Actions</span>
 
         <button
-          disabled={["Approved", "Rejected", "Amount Released"].includes(claim.status) || updating}
+          disabled={["Approved", "Rejected", "Amount Released", "Withdrawn"].includes(claim.status) || updating}
           onClick={() => setShowConfirm("Under Review")}
           className="px-6 py-3 rounded-xl font-bold bg-purple-50 text-purple-600 hover:bg-purple-100 border border-purple-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
@@ -332,7 +332,7 @@ export default function InsuranceClaimDetail() {
         </button>
 
         <button
-          disabled={["Approved", "Rejected", "Amount Released"].includes(claim.status) || updating}
+          disabled={["Approved", "Rejected", "Amount Released", "Withdrawn"].includes(claim.status) || updating}
           onClick={() => setShowConfirm("Additional Docs Required")}
           className="px-6 py-3 rounded-xl font-bold bg-amber-50 text-amber-600 hover:bg-amber-100 border border-amber-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
@@ -340,7 +340,7 @@ export default function InsuranceClaimDetail() {
         </button>
 
         <button
-          disabled={["Approved", "Rejected", "Amount Released"].includes(claim.status) || updating}
+          disabled={["Approved", "Rejected", "Amount Released", "Withdrawn"].includes(claim.status) || updating}
           onClick={() => setShowConfirm("Rejected")}
           className="px-6 py-3 rounded-xl font-bold bg-rose-50 text-rose-600 hover:bg-rose-100 border border-rose-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
@@ -348,7 +348,7 @@ export default function InsuranceClaimDetail() {
         </button>
 
         <button
-          disabled={["Approved", "Rejected", "Amount Released"].includes(claim.status) || updating}
+          disabled={["Approved", "Rejected", "Amount Released", "Withdrawn"].includes(claim.status) || updating}
           onClick={() => setShowConfirm("Approved")}
           className="px-6 py-3 rounded-xl font-bold bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg shadow-emerald-600/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
         >

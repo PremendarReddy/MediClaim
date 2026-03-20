@@ -283,9 +283,9 @@ export const createClaim = async (req, res) => {
         const missingDocuments = requiredDocs.filter(reqDoc => !providedDocs.includes(reqDoc));
 
         // Determine Initial Status
-        const initialStatus = missingDocuments.length === 0 ? 'Initiated' : 'Pending Documents';
+        const initialStatus = missingDocuments.length === 0 ? 'Submitted' : 'Pending Documents';
         const initialComment = missingDocuments.length === 0 
-           ? 'Claim drafted and fully verified (including Vault docs). Initiated.' 
+           ? 'Claim drafted and fully verified (including Vault docs). Submitted to Insurance.' 
            : `Claim drafted but awaiting mandatory documents: ${missingDocuments.join(', ')}`;
 
         const claim = await Claim.create({
@@ -384,6 +384,7 @@ export const getHospitalClaims = async (req, res) => {
             filter.hospitalId = req.user._id;
         } else if (req.user.role === 'INSURANCE' || req.user.role === 'ADMIN') {
             filter.insuranceCompanyId = req.user._id;
+            filter.status = { $nin: ['Pending Documents', 'Pending Patient Consent', 'Initiated'] };
         }
 
         const claims = await Claim.find(filter)
@@ -416,8 +417,13 @@ export const getClaimById = async (req, res) => {
         if (req.user.role === 'HOSPITAL' && claim.hospitalId._id.toString() !== req.user._id.toString()) {
             return res.status(401).json({ success: false, message: 'Not authorized' });
         }
-        if (req.user.role === 'INSURANCE' && claim.insuranceCompanyId._id.toString() !== req.user._id.toString()) {
-            return res.status(401).json({ success: false, message: 'Not authorized' });
+        if (req.user.role === 'INSURANCE') {
+            if (claim.insuranceCompanyId._id.toString() !== req.user._id.toString()) {
+                return res.status(401).json({ success: false, message: 'Not authorized' });
+            }
+            if (['Pending Documents', 'Pending Patient Consent', 'Initiated'].includes(claim.status)) {
+                return res.status(404).json({ success: false, message: 'Claim not found or not yet submitted' });
+            }
         }
         if (req.user.role === 'PATIENT' && claim.patientId._id.toString() !== req.user._id.toString()) {
             return res.status(401).json({ success: false, message: 'Not authorized' });
@@ -455,6 +461,76 @@ export const updateClaimStatus = async (req, res) => {
             status,
             updatedBy: req.user._id,
             comment: comment || `Status updated to ${status} via shared endpoint`
+        });
+
+        await claim.save();
+        res.json({ success: true, data: claim });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// @desc    Send OTP to patient for Hospital withdrawing a claim
+// @route   POST /api/hospitals/claims/:id/send-withdraw-otp
+// @access  Private/Hospital
+export const sendHospitalWithdrawOTP = async (req, res) => {
+    try {
+        const claim = await Claim.findOne({ _id: req.params.id, hospitalId: req.user._id }).populate('patientId');
+
+        if (!claim) {
+            return res.status(404).json({ success: false, message: 'Claim not found' });
+        }
+
+        if (['Approved', 'Rejected', 'Withdrawn', 'Amount Released'].includes(claim.status)) {
+            return res.status(400).json({ success: false, message: `Cannot withdraw a claim that is already ${claim.status}.` });
+        }
+
+        const patient = claim.patientId;
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+        otpStore.set(`withdraw_${claim._id}_${patient._id}`, { otp, expiresAt: Date.now() + 10 * 60 * 1000 });
+        await sendOTPEmail(patient.email, otp);
+
+        res.json({ success: true, message: "Withdrawal OTP sent to the patient's registered email." });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// @desc    Withdraw claim using Patient OTP (Hospital perspective)
+// @route   PUT /api/hospitals/claims/:id/withdraw
+// @access  Private/Hospital
+export const hospitalWithdrawClaim = async (req, res) => {
+    try {
+        const { otp } = req.body;
+        const claim = await Claim.findOne({ _id: req.params.id, hospitalId: req.user._id });
+
+        if (!claim) {
+            return res.status(404).json({ success: false, message: 'Claim not found' });
+        }
+
+        const patientId = claim.patientId;
+        const otpKey = `withdraw_${claim._id}_${patientId}`;
+        const storedOtpData = otpStore.get(otpKey);
+
+        if (!storedOtpData) {
+            return res.status(400).json({ success: false, message: 'OTP flow not initiated or expired.' });
+        }
+        if (Date.now() > storedOtpData.expiresAt) {
+            otpStore.delete(otpKey);
+            return res.status(400).json({ success: false, message: 'OTP expired. Please request a new one.' });
+        }
+        if (storedOtpData.otp !== otp) {
+            return res.status(400).json({ success: false, message: 'Invalid OTP provided.' });
+        }
+
+        otpStore.delete(otpKey);
+
+        claim.status = 'Withdrawn';
+        claim.history.push({
+            status: 'Withdrawn',
+            updatedBy: req.user._id,
+            comment: 'Hospital withdrew the claim successfully after explicit Patient OTP consent.'
         });
 
         await claim.save();
@@ -672,11 +748,11 @@ export const uploadMissingDocumentHospital = async (req, res) => {
         const missingDocuments = requiredDocs.filter(reqDoc => !providedDocs.includes(reqDoc));
 
         if (missingDocuments.length === 0 && claim.status === 'Pending Documents') {
-            claim.status = 'Initiated';
+            claim.status = 'Submitted';
             claim.history.push({
-                status: 'Initiated',
+                status: 'Submitted',
                 updatedBy: req.user._id,
-                comment: 'All mandatory documents verified. Claim officially initiated and sent to insurer.'
+                comment: 'All mandatory documents verified. Claim officially submitted and sent to insurer.'
             });
         }
 

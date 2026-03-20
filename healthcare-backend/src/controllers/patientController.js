@@ -77,11 +77,11 @@ export const uploadMissingDocument = async (req, res) => {
         const missingDocuments = requiredDocs.filter(reqDoc => !providedDocs.includes(reqDoc));
 
         if (missingDocuments.length === 0 && claim.status === 'Pending Documents') {
-            claim.status = 'Initiated';
+            claim.status = 'Submitted';
             claim.history.push({
-                status: 'Initiated',
+                status: 'Submitted',
                 updatedBy: req.user._id,
-                comment: 'All mandatory documents verified. Claim officially initiated.'
+                comment: 'All mandatory documents verified. Claim successfully submitted to insurer.'
             });
         }
 
@@ -156,6 +156,76 @@ export const approveClaim = async (req, res) => {
             status: 'Submitted',
             updatedBy: req.user._id,
             comment: 'Patient provided consent via verified OTP. Claim forwarded to Insurance.'
+        });
+
+        await claim.save();
+
+        res.json({ success: true, data: claim });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// @desc    Send OTP to patient for withdrawing a claim
+// @route   POST /api/patients/claims/:id/send-withdraw-otp
+// @access  Private/Patient
+export const sendWithdrawOTP = async (req, res) => {
+    try {
+        const claim = await Claim.findOne({ _id: req.params.id, patientId: req.user._id });
+
+        if (!claim) {
+            return res.status(404).json({ success: false, message: 'Claim not found' });
+        }
+
+        if (['Approved', 'Rejected', 'Withdrawn', 'Amount Released'].includes(claim.status)) {
+            return res.status(400).json({ success: false, message: `Cannot withdraw a claim that is already ${claim.status}.` });
+        }
+
+        const email = req.user.email;
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+        otpStore.set(`withdraw_${claim._id}_${req.user._id}`, { otp, expiresAt: Date.now() + 10 * 60 * 1000 });
+        await sendOTPEmail(email, otp);
+
+        res.json({ success: true, message: "Withdrawal OTP sent to your registered email." });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// @desc    Withdraw claim using OTP
+// @route   PUT /api/patients/claims/:id/withdraw
+// @access  Private/Patient
+export const withdrawClaim = async (req, res) => {
+    try {
+        const { otp } = req.body;
+        const claim = await Claim.findOne({ _id: req.params.id, patientId: req.user._id });
+
+        if (!claim) {
+            return res.status(404).json({ success: false, message: 'Claim not found' });
+        }
+
+        const otpKey = `withdraw_${claim._id}_${req.user._id}`;
+        const storedOtpData = otpStore.get(otpKey);
+
+        if (!storedOtpData) {
+            return res.status(400).json({ success: false, message: 'OTP flow not initiated or expired.' });
+        }
+        if (Date.now() > storedOtpData.expiresAt) {
+            otpStore.delete(otpKey);
+            return res.status(400).json({ success: false, message: 'OTP expired. Please request a new one.' });
+        }
+        if (storedOtpData.otp !== otp) {
+            return res.status(400).json({ success: false, message: 'Invalid OTP provided.' });
+        }
+
+        otpStore.delete(otpKey);
+
+        claim.status = 'Withdrawn';
+        claim.history.push({
+            status: 'Withdrawn',
+            updatedBy: req.user._id,
+            comment: 'Patient withdrew the claim successfully via OTP verification.'
         });
 
         await claim.save();

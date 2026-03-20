@@ -7,7 +7,11 @@ import { simulateRiskScore } from '../services/utils.js';
 // @access  Private/Insurance
 export const getInsuranceClaims = async (req, res) => {
     try {
-        const claims = await Claim.find({ insuranceCompanyId: req.user._id })
+        const activeFilter = { 
+            insuranceCompanyId: req.user._id, 
+            status: { $nin: ['Pending Documents', 'Pending Patient Consent', 'Initiated'] } 
+        };
+        const claims = await Claim.find(activeFilter)
             .populate('patientId', 'name email patientDetails')
             .populate('hospitalId', 'name email hospitalDetails')
             .sort({ createdAt: -1 });
@@ -123,7 +127,12 @@ export const getAdminAnalytics = async (req, res) => {
     try {
         const companyId = req.user._id;
 
-        const totalClaims = await Claim.countDocuments({ insuranceCompanyId: companyId });
+        const activeFilter = { 
+            insuranceCompanyId: companyId, 
+            status: { $nin: ['Pending Documents', 'Pending Patient Consent', 'Initiated'] } 
+        };
+
+        const totalClaims = await Claim.countDocuments(activeFilter);
         const pendingClaims = await Claim.countDocuments({ insuranceCompanyId: companyId, status: { $in: ['Submitted', 'Under Review'] } });
         const approvedClaims = await Claim.countDocuments({ insuranceCompanyId: companyId, status: 'Approved' });
         const rejectedClaims = await Claim.countDocuments({ insuranceCompanyId: companyId, status: 'Rejected' });

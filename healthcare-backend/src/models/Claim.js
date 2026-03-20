@@ -62,15 +62,16 @@ const claimSchema = new mongoose.Schema(
         status: {
             type: String,
             enum: [
-                'Pending Documents',         // Outstanding requirements before submission
-                'Initiated',                 // Hospital created the claim draft
-                'Pending Patient Consent',   // Waiting for Patient OTP approval
-                'Submitted',                 // Hospital submitted to Insurance
-                'Under Review',              // Insurance is verifying documents
-                'Additional Docs Required',  // Insurance requested more info
-                'Approved',                  // Claim approved by Insurance
-                'Rejected',                  // Claim rejected by Insurance
-                'Amount Released'            // Final payment sent to hospital bank
+                'Pending Documents',
+                'Initiated',
+                'Pending Patient Consent',
+                'Submitted',
+                'Under Review',
+                'Additional Docs Required',
+                'Approved',
+                'Rejected',
+                'Withdrawn',
+                'Amount Released'
             ],
             default: 'Initiated'
         },

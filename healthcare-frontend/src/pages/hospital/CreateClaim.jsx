@@ -467,9 +467,9 @@ export default function CreateClaim() {
                                             {loading ? "Submitting..." : "Verify & Submit"}
                                         </button>
                                     </div>
-                                    <p className="text-center text-xs font-bold text-slate-400 mt-4 uppercase tracking-wider">
-                                        (Dev mode: use 123456)
-                                    </p>
+                                     <p className="text-center text-xs font-bold text-slate-400 mt-4 uppercase tracking-wider">
+                                         Secure OTP Gateway
+                                     </p>
                                 </div>
                             </motion.div>
                         </div>

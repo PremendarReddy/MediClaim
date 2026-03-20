@@ -18,6 +18,11 @@ export default function ClaimDetail() {
   const [docType, setDocType] = useState("ID Proof");
   const [uploadFile, setUploadFile] = useState(null);
 
+  // Withdraw State
+  const [withdrawOtpSent, setWithdrawOtpSent] = useState(false);
+  const [withdrawOtp, setWithdrawOtp] = useState("");
+  const [isWithdrawing, setIsWithdrawing] = useState(false);
+
   // AI Risk State
   const [isScanningRow, setIsScanningRow] = useState(false);
 
@@ -101,6 +106,39 @@ export default function ClaimDetail() {
       toast.error("Failed to upload document");
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  const handleSendWithdrawOTP = async () => {
+    try {
+      setIsWithdrawing(true);
+      const res = await api.post(`/hospitals/claims/${id}/send-withdraw-otp`);
+      if (res.data.success) {
+        toast.info(res.data.message);
+        setWithdrawOtpSent(true);
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Failed to send withdrawal OTP");
+    } finally {
+      setIsWithdrawing(false);
+    }
+  };
+
+  const handleWithdrawSubmit = async () => {
+    if (!withdrawOtp) return toast.warning("Please enter the OTP");
+    try {
+      setIsWithdrawing(true);
+      const res = await api.put(`/hospitals/claims/${id}/withdraw`, { otp: withdrawOtp });
+      if (res.data.success) {
+        toast.success("Claim successfully withdrawn.");
+        setClaim(res.data.data);
+        setWithdrawOtpSent(false);
+        setWithdrawOtp("");
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Failed to verify OTP or withdraw claim");
+    } finally {
+      setIsWithdrawing(false);
     }
   };
 
@@ -310,25 +348,21 @@ export default function ClaimDetail() {
               {/* Line */}
               <div className="absolute left-6 top-2 bottom-6 w-0.5 bg-slate-100"></div>
 
-              {['Claim Initiated'].map((step, index) => (
+              {((claim.history && claim.history.length > 0) ? claim.history : [{ status: 'Initiated', updatedAt: claim.createdAt }]).map((step, index) => (
                 <div key={index} className="flex items-start space-x-6 relative z-10">
-                  <div className="w-5 h-5 mt-1 rounded-full bg-blue-500 border-4 border-blue-100 shadow-sm" />
-                  <div className="bg-slate-50 border border-slate-100 p-4 rounded-xl flex-1">
-                    <p className="font-bold text-slate-800">{step}</p>
-                    <p className="text-sm font-medium text-slate-500 mt-1">{new Date(claim.createdAt).toLocaleString()}</p>
+                  <div className={`w-5 h-5 mt-1 rounded-full border-4 shadow-sm shrink-0 ${step.status === 'Rejected' ? 'bg-rose-500 border-rose-100' : step.status === 'Pending Documents' ? 'bg-amber-500 border-amber-100' : 'bg-emerald-500 border-emerald-100'}`} />
+                  <div className={`bg-slate-50 border p-4 rounded-xl flex-1 ${step.status === 'Rejected' ? 'border-rose-200 bg-rose-50' : 'border-slate-100'}`}>
+                    <p className={`font-bold ${step.status === 'Rejected' ? 'text-rose-800' : 'text-slate-800'}`}>{step.status}</p>
+                    <p className="text-sm font-medium text-slate-500 mt-1">{new Date(step.updatedAt || claim.createdAt).toLocaleString()}</p>
+                    {step.comment && (
+                      <p className={`text-sm mt-3 font-medium p-3 rounded-lg ${step.status === 'Rejected' ? 'bg-rose-100 text-rose-900 border border-rose-200' : 'bg-white border border-slate-200 text-slate-700'}`}>
+                        {step.status === 'Rejected' && <span className="font-bold uppercase tracking-wider text-xs block mb-1">Reason for Rejection</span>}
+                        {step.comment}
+                      </p>
+                    )}
                   </div>
                 </div>
               ))}
-
-              {claim.status !== 'Claim Initiated' && (
-                <div className="flex items-start space-x-6 relative z-10">
-                  <div className="w-5 h-5 mt-1 rounded-full bg-emerald-500 border-4 border-emerald-100 shadow-sm" />
-                  <div className="bg-slate-50 border border-slate-100 p-4 rounded-xl flex-1">
-                    <p className="font-bold text-slate-800">{claim.status}</p>
-                    <p className="text-sm font-medium text-slate-500 mt-1">{new Date(claim.updatedAt).toLocaleString()}</p>
-                  </div>
-                </div>
-              )}
             </div>
           </motion.div>
 
@@ -367,38 +401,42 @@ export default function ClaimDetail() {
             </div>
           </motion.div>
 
-          {/* Action Panel */}
-          <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 sticky top-6">
-            <h2 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
-              <div className="w-2 h-6 bg-rose-500 rounded-full"></div> Admin Actions
-            </h2>
+          {/* Withdrawal Panel */}
+          {!['Withdrawn', 'Approved', 'Amount Released', 'Rejected'].includes(claim.status) && (
+             <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
+                <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                  <div className="w-2 h-6 bg-rose-500 rounded-full"></div> Withdraw Claim
+                </h2>
+                {!withdrawOtpSent ? (
+                  <button
+                    onClick={handleSendWithdrawOTP}
+                    disabled={isWithdrawing}
+                    className="w-full bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 font-bold px-4 py-3 rounded-xl transition shadow-sm disabled:opacity-50"
+                  >
+                    {isWithdrawing ? "Processing..." : "Initiate Patient Withdrawal"}
+                  </button>
+                ) : (
+                  <div className="space-y-4">
+                    <p className="text-xs font-bold text-slate-500">OTP sent to patient's email. Enter to confirm withdrawal:</p>
+                    <input
+                      type="text"
+                      placeholder="6-digit OTP"
+                      value={withdrawOtp}
+                      onChange={(e) => setWithdrawOtp(e.target.value)}
+                      className="w-full border border-slate-200 rounded-xl py-2.5 px-3 text-center tracking-widest font-mono focus:ring-2 focus:ring-rose-400 focus:outline-none"
+                    />
+                    <button
+                      onClick={handleWithdrawSubmit}
+                      disabled={isWithdrawing}
+                      className="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold py-3 rounded-xl shadow-lg shadow-rose-600/20 transition disabled:opacity-50"
+                    >
+                      {isWithdrawing ? "Verifying..." : "Confirm Final Withdrawal"}
+                    </button>
+                  </div>
+                )}
+             </div>
+          )}
 
-            <div className="space-y-3">
-              <button
-                disabled={claim.status !== "Claim Initiated"}
-                onClick={() => handleStatusUpdate("Under Review")}
-                className="w-full bg-amber-500 text-white font-bold px-5 py-3 rounded-xl hover:bg-amber-600 shadow-lg shadow-amber-500/20 transition disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Acknowledge & Sync
-              </button>
-
-              <button
-                disabled={["Approved", "Amount Released", "Rejected"].includes(claim.status)}
-                onClick={() => handleStatusUpdate("Approved")}
-                className="w-full bg-emerald-600 text-white font-bold px-5 py-3 rounded-xl hover:bg-emerald-700 shadow-lg shadow-emerald-600/20 transition disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Approve Dispersal
-              </button>
-
-              <button
-                disabled={["Approved", "Amount Released", "Rejected"].includes(claim.status)}
-                onClick={() => handleStatusUpdate("Rejected")}
-                className="w-full bg-rose-600 text-white font-bold px-5 py-3 rounded-xl hover:bg-rose-700 shadow-lg shadow-rose-600/20 transition disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Deny Request
-              </button>
-            </div>
-          </div>
         </div>
       </div>
           </>
