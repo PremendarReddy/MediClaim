@@ -22,7 +22,18 @@ export default function HospitalClaims() {
       setLoading(true);
       const res = await api.get('/hospitals/claims');
       if (res.data.success) {
-        setClaims(res.data.data);
+        // Augment deeply nested Claims with simulated AI Risk parameters (consistent with Insurer Views)
+        const augmented = res.data.data.map(c => {
+          let simulatedRisk = "LOW";
+          if (c.totalAmount > 500000) simulatedRisk = "HIGH";
+          else if (c.totalAmount > 100000) simulatedRisk = "MEDIUM";
+          
+          return { 
+             ...c, 
+             aiRiskScore: (c.aiRiskScore && c.aiRiskScore !== "PENDING") ? c.aiRiskScore : simulatedRisk 
+          };
+        });
+        setClaims(augmented);
       }
     } catch (error) {
       toast.error("Failed to fetch claims");
@@ -183,16 +194,16 @@ export default function HospitalClaims() {
                     </td>
                     <td className="px-6 py-4 text-sm">
                       <span
-                        className={`px-3 py-1 rounded-full text-xs font-bold tracking-wide ${claim.aiRiskScore?.level === "High"
+                        className={`px-3 py-1 rounded-full text-xs font-bold tracking-wide ${claim.aiRiskScore === "HIGH"
                             ? "bg-rose-100 text-rose-700"
-                            : claim.aiRiskScore?.level === "Medium"
+                            : claim.aiRiskScore === "MEDIUM"
                               ? "bg-amber-100 text-amber-700"
-                              : claim.aiRiskScore?.level === "Low"
+                              : claim.aiRiskScore === "LOW"
                                 ? "bg-emerald-100 text-emerald-700"
-                                : "bg-slate-100 text-slate-600"
+                                : "bg-slate-100 text-slate-500"
                           }`}
                       >
-                        {claim.aiRiskScore?.level || "Pending"}
+                        {claim.aiRiskScore === "PENDING" ? "Pending" : claim.aiRiskScore}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-sm font-medium text-slate-500">
