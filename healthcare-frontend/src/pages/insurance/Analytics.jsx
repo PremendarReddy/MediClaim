@@ -38,7 +38,19 @@ export default function Analytics() {
   const totalClaims = claims.length;
   const approvedClaims = claims.filter(c => ["Approved", "Amount Released"].includes(c.status)).length;
   const totalPayout = claims.filter(c => ["Approved", "Amount Released"].includes(c.status)).reduce((acc, c) => acc + (c.approvedAmount || c.totalAmount || 0), 0);
-  const avgProcessingTime = "2.4 Days"; // Mock metric until timestamp diffing implemented
+  
+  // Real Processing Time Diff
+  let processingSum = 0;
+  let processedCount = 0;
+  claims.filter(c => ["Approved", "Amount Released", "Rejected"].includes(c.status)).forEach(c => {
+    if (c.createdAt && c.updatedAt) {
+      const diffTime = Math.abs(new Date(c.updatedAt) - new Date(c.createdAt));
+      const diffDays = Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24))); // Minimum 1 day processing floor
+      processingSum += diffDays;
+      processedCount++;
+    }
+  });
+  const avgProcessingTime = processedCount > 0 ? `${(processingSum / processedCount).toFixed(1)} Days` : "N/A";
   
   // Aggregate Risk Level Breakdown
   const riskCounts = { LOW: 0, MEDIUM: 0, HIGH: 0, PENDING: 0 };
@@ -62,22 +74,30 @@ export default function Analytics() {
     { name: "Rejected", value: claims.filter(c => c.status === "Rejected").length }
   ];
 
-  // Mock Trend Data (Since timestamps might all be today for demo data)
-  const trendData = [
-    { month: "Jan", claims: 45, payout: 1200000 },
-    { month: "Feb", claims: 52, payout: 1500000 },
-    { month: "Mar", claims: 38, payout: 950000 },
-    { month: "Apr", claims: 65, payout: 2100000 },
-    { month: "May", claims: Math.max(totalClaims, 72), payout: Math.max(totalPayout, 2800000) }
-  ];
+  // Dynamic Monthly Trend Logic (Last 5 Months)
+  const trendData = [];
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const today = new Date();
+  for (let i = 4; i >= 0; i--) {
+      const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+      const monthlyClaims = claims.filter(c => {
+          const cd = new Date(c.createdAt || Date.now());
+          return cd.getMonth() === d.getMonth() && cd.getFullYear() === d.getFullYear();
+      });
+      const monthlyPayout = monthlyClaims.filter(c => ["Approved", "Amount Released"].includes(c.status))
+                              .reduce((acc, c) => acc + (c.approvedAmount || c.totalAmount || 0), 0);
+      trendData.push({ month: monthNames[d.getMonth()], claims: monthlyClaims.length, payout: monthlyPayout });
+  }
 
-  const diseaseDistribution = [
-    { name: "Cardiology", value: 35 },
-    { name: "Orthopedics", value: 25 },
-    { name: "Neurology", value: 15 },
-    { name: "Oncology", value: 10 },
-    { name: "Others", value: 15 },
-  ];
+  // Authentic Origin Distribution (Instead of disconnected Disease metrics)
+  const hospitalCounts = {};
+  claims.forEach(c => {
+      const hName = c.hospitalId?.name || "Unknown Partner";
+      hospitalCounts[hName] = (hospitalCounts[hName] || 0) + 1;
+  });
+  const hospitalDistribution = Object.keys(hospitalCounts).map(name => ({
+      name, value: hospitalCounts[name]
+  })).sort((a,b) => b.value - a.value).slice(0, 5); // top 5 Hospitals
 
   if (loading) {
     return (
@@ -185,16 +205,16 @@ export default function Analytics() {
           </div>
         </motion.div>
 
-        {/* Disease Categorization */}
+        {/* Hospital Claim Density */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
           <h2 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
-            <div className="w-2 h-6 bg-amber-400 rounded-full"></div> Procedural Frequency (Macro)
+            <div className="w-2 h-6 bg-amber-400 rounded-full"></div> Top Hospital Networks
           </h2>
           <div className="h-[250px] flex items-center justify-center">
              <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie data={diseaseDistribution} cx="50%" cy="50%" outerRadius={90} dataKey="value" stroke="none" label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={false}>
-                  {diseaseDistribution.map((entry, index) => (
+                <Pie data={hospitalDistribution} cx="50%" cy="50%" outerRadius={90} dataKey="value" stroke="none" label={({ name, percent }) => `${name.substring(0, 10)}${name.length > 10 ? '..' : ''} ${(percent * 100).toFixed(0)}%`} labelLine={false}>
+                  {hospitalDistribution.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
                   ))}
                 </Pie>

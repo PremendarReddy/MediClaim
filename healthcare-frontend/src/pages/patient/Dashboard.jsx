@@ -70,6 +70,12 @@ export default function PatientDashboard() {
   const healthRisk = analytics.healthRisk;
   const reportsCount = patientData?.claims?.reduce((acc, c) => acc + (c.documents?.length || 0), 0) || 0;
 
+  // Dynamic Insurance Data
+  const coverageLimit = Number(patientData?.patientDetails?.insuranceDetails?.coverageAmount) || 0;
+  const totalUtilized = patientData?.claims?.filter(c => ["Approved", "Amount Released"].includes(c.status)).reduce((acc, c) => acc + (c.approvedAmount || c.totalAmount || 0), 0) || 0;
+  const availableRemaining = Math.max(0, coverageLimit - totalUtilized);
+  const utilizationPercentage = coverageLimit > 0 ? Math.min(100, (totalUtilized / coverageLimit) * 100) : 0;
+
   if (loading) {
     return (
       <DashboardLayout>
@@ -123,19 +129,19 @@ export default function PatientDashboard() {
             <div className="grid grid-cols-2 gap-6 relative z-10">
               <div className="bg-black/20 p-5 rounded-2xl border border-white/10">
                 <p className="text-sm font-medium text-indigo-200 mb-1">Coverage Limit</p>
-                <p className="font-bold text-3xl">₹2,00,000</p>
+                <p className="font-bold text-3xl">₹{coverageLimit.toLocaleString()}</p>
               </div>
               <div className="bg-black/20 p-5 rounded-2xl border border-white/10">
                 <p className="text-sm font-medium text-indigo-200 mb-1">Total Utilized</p>
-                <p className="font-bold text-3xl">₹0</p>
+                <p className="font-bold text-3xl">₹{totalUtilized.toLocaleString()}</p>
               </div>
               <div className="col-span-2 bg-indigo-950/50 p-5 rounded-2xl border border-white/5 flex justify-between items-center">
                 <div>
                   <p className="text-sm font-medium text-indigo-200 mb-1">Available Remaining</p>
-                  <p className="font-bold text-2xl text-emerald-400">₹2,00,000</p>
+                  <p className="font-bold text-2xl text-emerald-400">₹{availableRemaining.toLocaleString()}</p>
                 </div>
                 <div className="h-12 w-12 rounded-full border-4 border-indigo-700 border-t-emerald-400 transform rotate-45 flex items-center justify-center bg-indigo-900 shadow-inner">
-                  <span className="text-xs font-bold -rotate-45">100%</span>
+                  <span className="text-xs font-bold -rotate-45">{Math.round(100 - utilizationPercentage)}%</span>
                 </div>
               </div>
             </div>

@@ -305,13 +305,26 @@ export const getPatientAnalytics = async (req, res) => {
         if (claims.length > 3) healthRisk = "Moderate Risk";
         if (claims.some(c => c.totalAmount > 300000)) healthRisk = "High Severity";
 
-        const expenseData = [
-            { month: "Jan", cost: Math.floor(Math.random() * 2000) },
-            { month: "Feb", cost: Math.floor(Math.random() * 5000) },
-            { month: "Mar", cost: Math.floor(Math.random() * 3000) },
-            { month: "Apr", cost: Math.floor(Math.random() * 1000) },
-            { month: "May", cost: claims.reduce((acc, c) => acc + (c.totalAmount || 0), 0) / 100 }, // Simulated slice of real current data
-        ];
+        // Generate actual expense data dynamically from the last 6 months
+        const expenseData = [];
+        const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        const today = new Date();
+
+        for (let i = 5; i >= 0; i--) {
+            const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+            const monthName = monthNames[d.getMonth()];
+
+            // Filter claims matching this specific year and month block
+            const monthlyClaims = claims.filter(c => {
+                const claimDate = new Date(c.createdAt);
+                return claimDate.getMonth() === d.getMonth() && claimDate.getFullYear() === d.getFullYear();
+            });
+
+            // Sum actual limits
+            const monthlyCost = monthlyClaims.reduce((acc, c) => acc + (c.approvedAmount || c.totalAmount || 0), 0);
+
+            expenseData.push({ month: monthName, cost: monthlyCost });
+        }
 
         res.json({
             success: true,

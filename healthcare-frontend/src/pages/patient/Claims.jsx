@@ -56,17 +56,31 @@ export default function PatientClaims() {
     "Bank Details (for reimbursement)",
   ];
 
-  const handleDocumentUpload = (e) => {
+  const handleDocumentUpload = async (e) => {
     e.preventDefault();
     if (!uploadForm.documentType || !uploadForm.file || !selectedClaim) {
       toast.warning("Please fill all fields");
       return;
     }
 
-    // Mock API Call
-    toast.success(`Successfully uploaded ${uploadForm.documentType}`);
-    setUploadForm({ documentType: "", file: null });
-    setShowUploadModal(false);
+    try {
+      const payload = {
+        docType: uploadForm.documentType,
+        fileUrl: `mock-patient-storage://${uploadForm.file.name.replace(/\\s+/g, '-').toLowerCase()}`,
+        name: uploadForm.file.name
+      };
+
+      const res = await api.put(`/patients/claims/${selectedClaim._id}/documents`, payload);
+      
+      if (res.data.success) {
+        toast.success(`Successfully uploaded ${uploadForm.documentType}`);
+        setUploadForm({ documentType: "", file: null });
+        setShowUploadModal(false);
+        fetchPatientClaims(); // Refresh to show uploaded status
+      }
+    } catch (error) {
+       toast.error(error.response?.data?.message || "Failed to upload document");
+    }
   };
 
   if (loading) {
