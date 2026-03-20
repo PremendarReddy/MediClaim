@@ -269,3 +269,71 @@ export const verifyLogin2FA = async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 };
+
+// @desc    Initiate forgot password flow Send OTP
+// @route   POST /api/auth/forgot-password
+// @access  Public
+export const forgotPassword = async (req, res) => {
+    try {
+        const { email } = req.body;
+        const user = await User.findOne({ email });
+
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
+
+        // Generate 6-digit OTP
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        
+        user.resetPasswordOTP = otp;
+        user.resetPasswordExpire = Date.now() + 15 * 60 * 1000; // 15 minutes
+        await user.save();
+
+        const emailResult = await sendOTPEmail(email, otp);
+
+        if (emailResult.success) {
+            res.json({ success: true, message: 'OTP sent to email successfully' });
+        } else {
+            // Optional fallback/cleanup if email fails
+            user.resetPasswordOTP = undefined;
+            user.resetPasswordExpire = undefined;
+            await user.save();
+            res.status(500).json({ success: false, message: 'Email could not be sent' });
+        }
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// @desc    Reset password using OTP
+// @route   POST /api/auth/reset-password
+// @access  Public
+export const resetPassword = async (req, res) => {
+    try {
+        const { email, otp, newPassword } = req.body;
+
+        if (!newPassword || newPassword.length < 6) {
+            return res.status(400).json({ success: false, message: 'Password must be at least 6 characters' });
+        }
+
+        const user = await User.findOne({
+            email,
+            resetPasswordOTP: otp,
+            resetPasswordExpire: { $gt: Date.now() },
+        });
+
+        if (!user) {
+            return res.status(400).json({ success: false, message: 'Invalid or expired OTP' });
+        }
+
+        user.password = newPassword;
+        user.resetPasswordOTP = undefined;
+        user.resetPasswordExpire = undefined;
+
+        await user.save();
+
+        res.json({ success: true, message: 'Password reset successful' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};

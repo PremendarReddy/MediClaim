@@ -5,6 +5,7 @@ import {
     getUserProfile,
     updateUserProfile,
     changePassword,
+    generate2FA,
     verify2FA,
     disable2FA,
     verifyLogin2FA,

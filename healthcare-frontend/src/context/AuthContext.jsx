@@ -10,12 +10,31 @@ export const AuthProvider = ({ children }) => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        // Check for saved user on load
-        const savedUser = localStorage.getItem('user');
-        if (savedUser) {
-            setUser(JSON.parse(savedUser));
-        }
-        setLoading(false);
+        const loadUser = async () => {
+            const savedUser = localStorage.getItem('user');
+            if (savedUser) {
+                const parsedUser = JSON.parse(savedUser);
+                setUser(parsedUser);
+                
+                // Fetch fresh profile data to resolve nested object truncations
+                try {
+                    if (parsedUser.token) {
+                        api.defaults.headers.common['Authorization'] = `Bearer ${parsedUser.token}`;
+                        const res = await api.get('/auth/profile');
+                        if (res.data.success) {
+                            const freshUser = { ...res.data.data, token: parsedUser.token };
+                            setUser(freshUser);
+                            localStorage.setItem('user', JSON.stringify(freshUser));
+                        }
+                    }
+                } catch (error) {
+                    console.error("Silent background profile hydration failed:", error);
+                }
+            }
+            setLoading(false);
+        };
+        
+        loadUser();
     }, []);
 
     const login = async (email, password) => {
@@ -25,7 +44,18 @@ export const AuthProvider = ({ children }) => {
                 return { success: true, requires2FA: true, tempToken: response.data.tempToken };
             }
             if (response.data.success) {
-                const userData = response.data.data;
+                let userData = response.data.data;
+                api.defaults.headers.common['Authorization'] = `Bearer ${userData.token}`;
+                
+                try {
+                    const profileRes = await api.get('/auth/profile');
+                    if (profileRes.data.success) {
+                        userData = { ...profileRes.data.data, token: userData.token };
+                    }
+                } catch (e) {
+                    console.error("Profile fetch failed post-login", e);
+                }
+
                 setUser(userData);
                 localStorage.setItem('user', JSON.stringify(userData));
                 return { success: true, role: userData.role };
@@ -43,7 +73,18 @@ export const AuthProvider = ({ children }) => {
         try {
             const response = await api.post('/auth/login/verify-2fa', { tempToken, token });
             if (response.data.success) {
-                const userData = response.data.data;
+                let userData = response.data.data;
+                api.defaults.headers.common['Authorization'] = `Bearer ${userData.token}`;
+                
+                try {
+                    const profileRes = await api.get('/auth/profile');
+                    if (profileRes.data.success) {
+                        userData = { ...profileRes.data.data, token: userData.token };
+                    }
+                } catch (e) {
+                    console.error("Profile fetch failed post-2FA", e);
+                }
+
                 setUser(userData);
                 localStorage.setItem('user', JSON.stringify(userData));
                 return { success: true, role: userData.role };
@@ -61,7 +102,18 @@ export const AuthProvider = ({ children }) => {
         try {
             const response = await api.post('/auth/register', userData);
             if (response.data.success) {
-                const newUserData = response.data.data;
+                let newUserData = response.data.data;
+                api.defaults.headers.common['Authorization'] = `Bearer ${newUserData.token}`;
+                
+                try {
+                    const profileRes = await api.get('/auth/profile');
+                    if (profileRes.data.success) {
+                        newUserData = { ...profileRes.data.data, token: newUserData.token };
+                    }
+                } catch (e) {
+                    console.error("Profile fetch failed post-register", e);
+                }
+
                 setUser(newUserData);
                 localStorage.setItem('user', JSON.stringify(newUserData));
                 return { success: true, role: newUserData.role };
