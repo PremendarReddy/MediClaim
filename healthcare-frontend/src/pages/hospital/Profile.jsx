@@ -3,14 +3,33 @@ import DashboardLayout from "../../layouts/DashboardLayout";
 import { useAuth } from "../../context/AuthContext";
 import { motion } from "framer-motion";
 import { Building2, Mail, MapPin, Hash, Activity, FileText } from "lucide-react";
+import api from "../../api/axios";
 
 export default function Profile() {
     const { user } = useAuth();
     const [stats, setStats] = useState({ totalPatients: 0, activeClaims: 0 });
 
     useEffect(() => {
-        // In a real app, fetch stats from /api/hospitals/stats
-        setStats({ totalPatients: 42, activeClaims: 15 });
+        const fetchStats = async () => {
+             try {
+                 const [patientsRes, claimsRes] = await Promise.all([
+                     api.get('/hospitals/patients'),
+                     api.get('/hospitals/claims')
+                 ]);
+                 
+                 const totalPatients = patientsRes.data?.count || patientsRes.data?.data?.length || 0;
+                 const allClaims = claimsRes.data?.data || [];
+                 const activeClaims = allClaims.filter(c => c.status === "Pending" || c.status === "Submitted").length;
+
+                 setStats({
+                     totalPatients,
+                     activeClaims
+                 });
+             } catch (err) {
+                 console.error("Failed to fetch hospital stats natively", err);
+             }
+        };
+        fetchStats();
     }, []);
 
     return (

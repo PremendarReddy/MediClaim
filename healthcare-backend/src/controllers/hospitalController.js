@@ -197,6 +197,24 @@ export const createClaim = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Patient not found or not associated with this hospital' });
         }
 
+        // Coverage Limit Validation
+        const coverageLimit = Number(patient.patientDetails?.insuranceDetails?.coverageAmount) || 0;
+        
+        // Calculate mathematically remaining funds from previous claims
+        const existingClaims = await Claim.find({ patientId });
+        const totalUtilized = existingClaims
+            .filter(c => ["Approved", "Amount Released"].includes(c.status))
+            .reduce((acc, c) => acc + (c.approvedAmount || c.totalAmount || 0), 0);
+            
+        const availableBalance = Math.max(0, coverageLimit - totalUtilized);
+
+        if (Number(totalAmount) > availableBalance) {
+            return res.status(400).json({ 
+                success: false, 
+                message: `Claim amount (₹${Number(totalAmount).toLocaleString()}) exceeds the patient's available coverage balance (₹${availableBalance.toLocaleString()}).` 
+            });
+        }
+
         // Verify OTP
         const otpKey = `initiate_claim_${patientId}`;
         const storedOtpData = otpStore.get(otpKey);
@@ -625,15 +643,23 @@ export const getHospitalAnalytics = async (req, res) => {
         const claims = await Claim.find({ hospitalId: req.user._id });
         const patients = await User.find({ role: 'PATIENT', 'patientDetails.registeredByHospital': req.user._id });
 
-        // Calculate Monthly Admissions (Mock trend but scaled to real patient count)
-        // In reality, we group by createdAt of patients.
-        const months = ["Jan", "Feb", "Mar", "Apr", "May"];
-        const monthlyAdmissions = months.map(m => ({ month: m, patients: Math.floor(Math.random() * (patients.length || 10)) }));
+        // Calculate Authentic Monthly Admissions cleanly trailing 5 months
+        const monthlyAdmissions = [];
+        const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        const today = new Date();
+        for (let i = 4; i >= 0; i--) {
+            const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+            const monthlyCount = patients.filter(p => {
+                const pd = new Date(p.createdAt || Date.now());
+                return pd.getMonth() === d.getMonth() && pd.getFullYear() === d.getFullYear();
+            }).length;
+            monthlyAdmissions.push({ month: monthNames[d.getMonth()], patients: monthlyCount });
+        }
 
         // Calculate Claim Distribution exact numbers
         const approvedCount = claims.filter(c => c.status === 'Approved').length;
         const rejectedCount = claims.filter(c => c.status === 'Rejected').length;
-        const pendingCount = claims.filter(c => c.status !== 'Approved' && c.status !== 'Rejected').length;
+        const pendingCount = claims.filter(c => c.status !== 'Approved' && c.status !== 'Rejected' && c.status !== 'Withdrawn').length;
 
         const claimDistribution = [
             { name: "Approved", value: approvedCount > 0 ? approvedCount : 1 }, // Fallback to 1 so chart isn't empty if 0
@@ -644,6 +670,8 @@ export const getHospitalAnalytics = async (req, res) => {
         res.json({
             success: true,
             data: {
+                totalPatients: patients.length,
+                activeClaims: pendingCount,
                 monthlyAdmissions,
                 claimDistribution
             }
