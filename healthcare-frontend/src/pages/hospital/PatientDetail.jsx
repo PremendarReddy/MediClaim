@@ -4,7 +4,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import StatusBadge from "../../components/ui/StatusBadge";
 import api from "../../api/axios";
 import { toast } from "react-toastify";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 
 export default function PatientDetail() {
   const { id } = useParams();
@@ -22,9 +22,37 @@ export default function PatientDetail() {
   });
   const [uploading, setUploading] = useState(false);
 
+  // Insurance Addition States
+  const [showInsuranceModal, setShowInsuranceModal] = useState(false);
+  const [insuranceProviders, setInsuranceProviders] = useState([]);
+  const [insuranceSubmitting, setInsuranceSubmitting] = useState(false);
+  const [insuranceForm, setInsuranceForm] = useState({
+    providerId: "",
+    policyNumber: "",
+    validUpto: "",
+    coverageAmount: "",
+    memberId: "",
+    isCustomProvider: false,
+    customProviderName: "",
+    customProviderEmail: "",
+    customProviderPhone: "",
+  });
+
   useEffect(() => {
     fetchPatientData();
+    fetchInsuranceProviders();
   }, [id]);
+
+  const fetchInsuranceProviders = async () => {
+    try {
+        const res = await api.get('/hospitals/insurance-companies');
+        if (res.data.success) {
+            setInsuranceProviders(res.data.data);
+        }
+    } catch (error) {
+        console.warn("Failed to fetch insurance providers for modal");
+    }
+  };
 
   const fetchPatientData = async () => {
     try {
@@ -121,6 +149,54 @@ export default function PatientDetail() {
       }
     } catch (error) {
       toast.error(error.response?.data?.message || "Failed to update checkup date");
+    }
+  };
+
+  const handleLinkInsurance = async (e) => {
+    e.preventDefault();
+    if (!insuranceForm.isCustomProvider && !insuranceForm.providerId) {
+      toast.warning("Please select an insurance provider");
+      return;
+    }
+    if (insuranceForm.isCustomProvider && !insuranceForm.customProviderName) {
+      toast.warning("Please enter the custom provider name");
+      return;
+    }
+    if (!insuranceForm.policyNumber || !insuranceForm.coverageAmount) {
+      toast.warning("Policy Number and Coverage Amount are mandatory");
+      return;
+    }
+
+    setInsuranceSubmitting(true);
+    try {
+      let insuranceDetails = { ...insuranceForm, insuranceDocuments: [] };
+      
+      // Auto-populate providerName if it's a platform provider
+      if (!insuranceDetails.isCustomProvider) {
+         const provider = insuranceProviders.find(p => p._id === insuranceDetails.providerId);
+         if (provider) {
+             insuranceDetails.providerName = provider.insuranceDetails?.companyName || provider.name;
+         }
+      }
+
+      // Convert coverageAmount to number
+      insuranceDetails.coverageAmount = Number(insuranceDetails.coverageAmount);
+      insuranceDetails.balanceAmount = insuranceDetails.coverageAmount;
+
+      const res = await api.put(`/hospitals/patients/${patient._id}`, { insuranceDetails });
+      if (res.data.success) {
+          setPatient(res.data.data);
+          toast.success("Insurance linked successfully!");
+          setShowInsuranceModal(false);
+          setInsuranceForm({
+              providerId: "", policyNumber: "", validUpto: "", coverageAmount: "", memberId: "",
+              isCustomProvider: false, customProviderName: "", customProviderEmail: "", customProviderPhone: ""
+          });
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Failed to link insurance");
+    } finally {
+      setInsuranceSubmitting(false);
     }
   };
 
@@ -312,7 +388,7 @@ export default function PatientDetail() {
               
               <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 mt-6">
                 <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><div className="w-2 h-6 bg-indigo-500 rounded-full"></div> Insurance Overview</h3>
-                {patient.patientDetails?.insuranceDetails ? (
+                {patient.patientDetails?.insuranceDetails && (patient.patientDetails.insuranceDetails.providerId || patient.patientDetails.insuranceDetails.providerName || patient.patientDetails.insuranceDetails.policyNumber || patient.patientDetails.insuranceDetails.isCustomProvider) ? (
                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
                       <div>
                         <p className="text-slate-500 font-semibold mb-1">Provider & Policy</p>
@@ -342,7 +418,15 @@ export default function PatientDetail() {
                       </div>
                    </div>
                 ) : (
-                   <p className="text-sm text-slate-500">No insurance details were provided during registration.</p>
+                   <div className="flex flex-col items-start gap-4 p-4 border border-dashed border-slate-300 rounded-xl bg-slate-50/50">
+                       <p className="text-sm text-slate-500 font-medium">No insurance details were provided during registration. The patient is considered Uninsured.</p>
+                       <button 
+                           onClick={() => setShowInsuranceModal(true)}
+                           className="bg-emerald-100 text-emerald-700 border border-emerald-200 font-bold px-5 py-2.5 rounded-xl hover:bg-emerald-200 hover:text-emerald-800 transition shadow-sm text-sm flex items-center gap-2"
+                       >
+                           <span className="text-lg leading-none">+</span> Link Insurance Profile
+                       </button>
+                   </div>
                 )}
               </div>
             </motion.div>
@@ -537,6 +621,106 @@ export default function PatientDetail() {
           )}
         </div>
       </div>
+
+      {/* Insurance Overlay Modal */}
+      <AnimatePresence>
+        {showInsuranceModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm overflow-y-auto">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white p-8 rounded-3xl shadow-2xl max-w-2xl w-full border border-slate-100 my-8"
+            >
+              <div className="flex justify-between items-center mb-6 border-b border-slate-100 pb-4">
+                <h3 className="text-xl font-bold text-slate-800 flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-lg">🛡️</div>
+                  Link Patient Insurance
+                </h3>
+                <button onClick={() => setShowInsuranceModal(false)} className="text-slate-400 hover:text-slate-600 text-2xl leading-none">&times;</button>
+              </div>
+
+              <form onSubmit={handleLinkInsurance} className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">Insurance Provider *</label>
+                    <select
+                      value={insuranceForm.isCustomProvider ? "OTHER" : insuranceForm.providerId}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === "OTHER") {
+                          setInsuranceForm({ ...insuranceForm, isCustomProvider: true, providerId: "" });
+                        } else {
+                          setInsuranceForm({ ...insuranceForm, isCustomProvider: false, providerId: val });
+                        }
+                      }}
+                      className="w-full border border-slate-300 rounded-xl py-3 px-4 focus:ring-2 focus:ring-emerald-500 focus:outline-none bg-white transition text-slate-700 font-medium"
+                    >
+                      <option value="">-- Select Provider --</option>
+                      {insuranceProviders.map(provider => (
+                        <option key={provider._id} value={provider._id}>{provider.insuranceDetails?.companyName || provider.name}</option>
+                      ))}
+                      <option value="OTHER">Other (Custom Provider)</option>
+                    </select>
+                  </div>
+
+                  {insuranceForm.isCustomProvider && (
+                    <div className="md:col-span-2 p-5 bg-slate-50 border border-slate-200 rounded-xl space-y-5 shadow-inner">
+                      <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 flex items-center gap-2">
+                         <span className="w-1.5 h-4 bg-slate-400 rounded-full"></span> Custom Provider Details
+                      </p>
+                      <div>
+                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">Company Name *</label>
+                        <input type="text" placeholder="e.g., Global Health Insurance Ltd." required value={insuranceForm.customProviderName} onChange={(e) => setInsuranceForm({ ...insuranceForm, customProviderName: e.target.value })} className="w-full border border-slate-300 rounded-lg py-2.5 px-3 focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm transition" />
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                        <div>
+                          <label className="block text-sm font-medium text-slate-700 mb-1.5">Provider Email</label>
+                          <input type="email" placeholder="claims@globalhealth.com" value={insuranceForm.customProviderEmail} onChange={(e) => setInsuranceForm({ ...insuranceForm, customProviderEmail: e.target.value })} className="w-full border border-slate-300 rounded-lg py-2.5 px-3 focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm transition" />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-slate-700 mb-1.5">Provider Phone</label>
+                          <input type="text" placeholder="+1 800-123-4567" value={insuranceForm.customProviderPhone} onChange={(e) => setInsuranceForm({ ...insuranceForm, customProviderPhone: e.target.value })} className="w-full border border-slate-300 rounded-lg py-2.5 px-3 focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm transition" />
+                        </div>
+                      </div>
+                      <p className="text-xs text-slate-500 mt-2 font-medium bg-blue-50 text-blue-700 px-3 py-2 rounded-lg border border-blue-100">
+                         ℹ️ Note: An email request will be sent to the custom provider to verify this claim when initiated.
+                      </p>
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">Policy Number *</label>
+                    <input type="text" required value={insuranceForm.policyNumber} onChange={(e) => setInsuranceForm({ ...insuranceForm, policyNumber: e.target.value })} className="w-full border border-slate-300 rounded-xl py-3 px-4 focus:ring-2 focus:ring-emerald-500 focus:outline-none transition" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">Member ID</label>
+                    <input type="text" value={insuranceForm.memberId} onChange={(e) => setInsuranceForm({ ...insuranceForm, memberId: e.target.value })} className="w-full border border-slate-300 rounded-xl py-3 px-4 focus:ring-2 focus:ring-emerald-500 focus:outline-none transition" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">Coverage Amount (₹) *</label>
+                    <div className="relative">
+                      <span className="absolute inset-y-0 left-0 pl-4 flex items-center text-slate-500 font-bold font-mono">₹</span>
+                      <input type="number" min="0" required value={insuranceForm.coverageAmount} onChange={(e) => setInsuranceForm({ ...insuranceForm, coverageAmount: e.target.value })} className="w-full border border-slate-300 rounded-xl py-3 pl-8 pr-4 focus:ring-2 focus:ring-emerald-500 focus:outline-none transition font-mono font-bold" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">Valid Upto</label>
+                    <input type="date" value={insuranceForm.validUpto} onChange={(e) => setInsuranceForm({ ...insuranceForm, validUpto: e.target.value })} className="w-full border border-slate-300 rounded-xl py-3 px-4 focus:ring-2 focus:ring-emerald-500 focus:outline-none transition text-slate-600" />
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-3 pt-6 border-t border-slate-100 mt-6">
+                  <button type="button" onClick={() => setShowInsuranceModal(false)} className="px-6 py-2.5 font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition">Cancel</button>
+                  <button type="submit" disabled={insuranceSubmitting} className="px-8 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-lg shadow-emerald-500/30 disabled:opacity-50 transition">
+                    {insuranceSubmitting ? "Linking..." : "Attach Profile"}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </DashboardLayout>
   );
 }

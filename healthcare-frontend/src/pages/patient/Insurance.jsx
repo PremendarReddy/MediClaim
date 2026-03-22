@@ -49,9 +49,9 @@ export default function PatientInsurance() {
         console.error("Could not fetch claims for usage calculation", e);
       }
 
-      if (insDetails) {
+      if (insDetails && (insDetails.providerId || insDetails.providerName || insDetails.policyNumber || insDetails.isCustomProvider)) {
           const newData = {
-            company: insDetails.providerName || "N/A",
+            company: insDetails.providerName || insDetails.customProviderName || "N/A",
             insuranceId: insDetails.memberId || "N/A",
             policyNumber: insDetails.policyNumber || "N/A",
             status: "Active",
@@ -61,6 +61,17 @@ export default function PatientInsurance() {
             insuranceDocuments: insDetails.insuranceDocuments || []
           };
           setInsuranceData(newData);
+      } else {
+          setInsuranceData({
+            company: "No insurance detailed specified",
+            insuranceId: "Unregistered",
+            policyNumber: "Unregistered",
+            status: "Uninsured",
+            totalLimit: 0,
+            usedAmount: 0,
+            validUpto: "N/A",
+            insuranceDocuments: []
+          });
       }
 
     } catch(err) {

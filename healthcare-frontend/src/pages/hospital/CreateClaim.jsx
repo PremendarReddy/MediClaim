@@ -55,7 +55,17 @@ export default function CreateClaim() {
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
+        if (name === "patientId") {
+            const selectedPatient = patients.find(p => p._id === value);
+            const providerId = selectedPatient?.patientDetails?.insuranceDetails?.providerId || "";
+            setFormData(prev => ({ 
+                ...prev, 
+                patientId: value,
+                insuranceCompanyId: providerId 
+            }));
+        } else {
+            setFormData(prev => ({ ...prev, [name]: value }));
+        }
     };
 
     const handleDocumentAdd = () => {
@@ -81,9 +91,11 @@ export default function CreateClaim() {
 
     const handleInitiateClick = async (e) => {
         e.preventDefault();
+        const selectedPatient = patients.find(p => p._id === formData.patientId);
+        const isCustom = selectedPatient?.patientDetails?.insuranceDetails?.isCustomProvider;
 
-        if (!formData.patientId || !formData.insuranceCompanyId || !formData.amount || !formData.diagnosis || !formData.treatment) {
-            toast.error("Please fill all required fields");
+        if (!formData.patientId || (!formData.insuranceCompanyId && !isCustom) || !formData.amount || !formData.diagnosis || !formData.treatment) {
+            toast.error("Please fill all required medical fields and ensure an Insurer is dynamically linked.");
             return;
         }
 
@@ -236,30 +248,41 @@ export default function CreateClaim() {
                                     className="w-full border border-slate-300 rounded-xl py-3 px-4 focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white font-medium text-slate-700 transition"
                                 >
                                     <option value="">-- Select Patient --</option>
-                                    {patients.map(p => (
-                                        <option key={p._id} value={p._id}>{p.name} (ID: {p._id.slice(-6)})</option>
-                                    ))}
+                                    {patients.map(p => {
+                                        const hasInsurance = !!p.patientDetails?.insuranceDetails && (p.patientDetails.insuranceDetails.providerId || p.patientDetails.insuranceDetails.providerName || p.patientDetails.insuranceDetails.policyNumber || p.patientDetails.insuranceDetails.isCustomProvider);
+                                        return (
+                                            <option key={p._id} value={p._id} disabled={!hasInsurance}>
+                                                {p.name} (ID: {p._id.slice(-6)}) {!hasInsurance ? " - UNINSURED (Action Required)" : ""}
+                                            </option>
+                                        );
+                                    })}
                                 </select>
                                 {patients.length === 0 && (
                                     <p className="mt-2 text-sm text-yellow-600 font-medium">No patients found. Please register a patient first.</p>
                                 )}
                             </div>
                             <div>
-                                <label className="block text-sm font-semibold text-slate-700 mb-2">Insurance Provider *</label>
-                                <select
-                                    name="insuranceCompanyId"
-                                    value={formData.insuranceCompanyId}
-                                    onChange={handleInputChange}
-                                    className="w-full border border-slate-300 rounded-xl py-3 px-4 focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white font-medium text-slate-700 transition"
-                                >
-                                    <option value="">-- Select Insurance Provider --</option>
-                                    {insuranceCompanies.map(c => (
-                                        <option key={c._id} value={c._id}>{c.insuranceDetails?.companyName || c.name}</option>
-                                    ))}
-                                </select>
-                                {insuranceCompanies.length === 0 && (
-                                    <p className="mt-2 text-sm text-yellow-600 font-medium">No active insurance providers available.</p>
-                                )}
+                                <label className="block text-sm font-semibold text-slate-700 mb-2">Insurance Provider (Auto-Linked)</label>
+                                <div className="w-full border border-slate-300 rounded-xl py-3 px-4 bg-slate-50 font-medium text-slate-600 min-h-[50px] flex items-center">
+                                    {formData.patientId ? (
+                                        (() => {
+                                            const p = patients.find(pat => pat._id === formData.patientId);
+                                            if (p?.patientDetails?.insuranceDetails && (p.patientDetails.insuranceDetails.providerId || p.patientDetails.insuranceDetails.providerName || p.patientDetails.insuranceDetails.policyNumber || p.patientDetails.insuranceDetails.isCustomProvider)) {
+                                                const ins = p.patientDetails.insuranceDetails;
+                                                return (
+                                                    <span className="flex items-center gap-2">
+                                                        <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                                        {ins.providerName || ins.customProviderName || "Unknown Insurer"} 
+                                                        <span className="text-xs text-slate-400 font-mono ml-2">({ins.policyNumber || "No Policy ID"})</span>
+                                                    </span>
+                                                );
+                                            }
+                                            return <span className="text-rose-500">Uninsured Patient</span>;
+                                        })()
+                                    ) : (
+                                        "Select a patient first"
+                                    )}
+                                </div>
                             </div>
                         </div>
                     </div>
