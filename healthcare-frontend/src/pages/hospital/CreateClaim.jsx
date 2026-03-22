@@ -11,6 +11,7 @@ export default function CreateClaim() {
     const [loading, setLoading] = useState(false);
     const [patients, setPatients] = useState([]);
     const [insuranceCompanies, setInsuranceCompanies] = useState([]);
+    const [hospitalClaims, setHospitalClaims] = useState([]);
 
     // OTP Modal State
     const [showOTPModal, setShowOTPModal] = useState(false);
@@ -29,7 +30,19 @@ export default function CreateClaim() {
     useEffect(() => {
         fetchPatients();
         fetchInsuranceCompanies();
+        fetchHospitalClaims();
     }, []);
+
+    const fetchHospitalClaims = async () => {
+        try {
+            const res = await api.get('/hospitals/claims');
+            if (res.data.success) {
+                setHospitalClaims(res.data.data);
+            }
+        } catch (err) {
+            console.warn("Failed to fetch hospital claims for threshold math.", err);
+        }
+    };
 
     const fetchPatients = async () => {
         try {
@@ -102,6 +115,20 @@ export default function CreateClaim() {
         if (formData.documents.some(doc => !doc.file || !doc.docType)) {
             toast.error("Please complete all document entries or remove empty ones.");
             return;
+        }
+
+        // Enforce coverage bounds locally
+        if (selectedPatient?.patientDetails?.insuranceDetails) {
+            const coverageLimit = Number(selectedPatient.patientDetails.insuranceDetails.coverageAmount) || 0;
+            const used = hospitalClaims
+                .filter(c => c.patientId?._id === selectedPatient._id && ["Approved", "Amount Released"].includes(c.status))
+                .reduce((acc, c) => acc + (c.approvedAmount || c.totalAmount || 0), 0);
+            
+            const availableBalance = Math.max(0, coverageLimit - used);
+            if (Number(formData.amount) > availableBalance) {
+                toast.error(`Restricted: Claim amount (₹${Number(formData.amount).toLocaleString()}) exceeds the maximum allowed balance of ₹${availableBalance.toLocaleString()}`);
+                return;
+            }
         }
 
         // Trigger OTP send
@@ -219,6 +246,22 @@ export default function CreateClaim() {
         }
     }
 
+    let availableBalance = null;
+    let isExceeding = false;
+    
+    if (formData.patientId) {
+        const selectedPatient = patients.find(p => p._id === formData.patientId);
+        if (selectedPatient?.patientDetails?.insuranceDetails) {
+            const coverageLimit = Number(selectedPatient.patientDetails.insuranceDetails.coverageAmount) || 0;
+            const used = hospitalClaims
+                .filter(c => c.patientId?._id === selectedPatient._id && ["Approved", "Amount Released"].includes(c.status))
+                .reduce((acc, c) => acc + (c.approvedAmount || c.totalAmount || 0), 0);
+            
+            availableBalance = Math.max(0, coverageLimit - used);
+            isExceeding = availableBalance !== null && Number(formData.amount) > availableBalance;
+        }
+    }
+
     return (
         <DashboardLayout>
             <div className="flex justify-between items-center mb-8">
@@ -317,21 +360,34 @@ export default function CreateClaim() {
                             </div>
 
                             <div>
-                                <label className="block text-sm font-semibold text-slate-700 mb-2">Claim Amount (₹) *</label>
-                                <div className="relative">
-                                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                                        <span className="text-slate-500 font-bold">₹</span>
+                                <>
+                                    <label className="block text-sm font-semibold text-slate-700 mb-2">
+                                        Claim Amount (₹) *
+                                        {availableBalance !== null && (
+                                            <span className={`ml-2 text-xs font-bold px-2 py-0.5 rounded-full ${isExceeding ? 'bg-rose-100 text-rose-600' : 'bg-emerald-100 text-emerald-700'}`}>
+                                                Limit: ₹{availableBalance.toLocaleString()}
+                                            </span>
+                                        )}
+                                    </label>
+                                    <div className="relative">
+                                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                            <span className={`font-bold ${isExceeding ? 'text-rose-500' : 'text-slate-500'}`}>₹</span>
+                                        </div>
+                                        <input
+                                            type="number"
+                                            name="amount"
+                                            value={formData.amount}
+                                            onChange={handleInputChange}
+                                            placeholder="250000"
+                                            min="1"
+                                            max={availableBalance !== null ? availableBalance : undefined}
+                                            className={`w-full border rounded-xl py-3 pl-10 pr-4 focus:ring-2 focus:outline-none transition text-lg font-bold ${isExceeding ? 'border-rose-300 focus:ring-rose-500 text-rose-600 bg-rose-50' : 'border-slate-300 focus:ring-blue-500 text-slate-800'}`}
+                                        />
                                     </div>
-                                    <input
-                                        type="number"
-                                        name="amount"
-                                        value={formData.amount}
-                                        onChange={handleInputChange}
-                                        placeholder="250000"
-                                        min="1"
-                                        className="w-full border border-slate-300 rounded-xl py-3 pl-10 pr-4 focus:ring-2 focus:ring-blue-500 focus:outline-none transition text-lg font-bold text-slate-800"
-                                    />
-                                </div>
+                                    {isExceeding && (
+                                        <p className="text-rose-500 text-xs font-bold mt-2 animate-pulse">Amount exceeds patient's remaining coverage balance!</p>
+                                    )}
+                                </>
                             </div>
                         </div>
                     </div>
@@ -434,7 +490,7 @@ export default function CreateClaim() {
                             whileHover={{ scale: 1.02 }}
                             whileTap={{ scale: 0.98 }}
                             type="submit"
-                            disabled={otpSending || patients.length === 0}
+                            disabled={otpSending || patients.length === 0 || isExceeding}
                             className="bg-blue-600 text-white px-8 py-3 rounded-xl hover:bg-blue-700 shadow-lg shadow-blue-500/30 disabled:opacity-50 disabled:cursor-not-allowed font-bold transition-all text-lg"
                         >
                             {otpSending ? "Sending OTP..." : "Initiate Claim"}
