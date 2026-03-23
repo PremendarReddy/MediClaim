@@ -21,6 +21,15 @@ const ticketSchema = new mongoose.Schema(
             enum: ['HOSPITAL', 'PATIENT'],
             required: true
         },
+        targetRole: {
+            type: String,
+            enum: ['HOSPITAL', 'INSURANCE', 'ADMIN'],
+            default: 'INSURANCE'
+        },
+        targetId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'User'
+        },
         userId: {
             type: mongoose.Schema.Types.ObjectId,
             ref: 'User',

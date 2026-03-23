@@ -26,6 +26,21 @@ export default function PatientDetail() {
   const [showInsuranceModal, setShowInsuranceModal] = useState(false);
   const [insuranceProviders, setInsuranceProviders] = useState([]);
   const [insuranceSubmitting, setInsuranceSubmitting] = useState(false);
+
+  const [coverageBreakdown, setCoverageBreakdown] = useState([
+     { sectionName: "In-patient Hospitalization", limit: "" },
+     { sectionName: "Pre & Post Hospitalization", limit: "" },
+     { sectionName: "Day Care Procedures", limit: "" },
+  ]);
+
+  const addBreakdownRow = () => setCoverageBreakdown([...coverageBreakdown, { sectionName: "", limit: "" }]);
+  const removeBreakdownRow = (index) => setCoverageBreakdown(coverageBreakdown.filter((_, i) => i !== index));
+  const handleBreakdownChange = (index, field, value) => {
+      const updated = [...coverageBreakdown];
+      updated[index][field] = value;
+      setCoverageBreakdown(updated);
+  };
+
   const [insuranceForm, setInsuranceForm] = useState({
     providerId: "",
     policyNumber: "",
@@ -163,13 +178,25 @@ export default function PatientDetail() {
       return;
     }
     if (!insuranceForm.policyNumber || !insuranceForm.coverageAmount) {
-      toast.warning("Policy Number and Coverage Amount are mandatory");
+      toast.warning("Policy Number and Total Coverage Amount are mandatory.");
       return;
+    }
+
+    const totalCoverage = Number(insuranceForm.coverageAmount);
+    if (!totalCoverage || totalCoverage <= 0) {
+        toast.error("Please explicitly declare the overall Total Coverage Amount.");
+        return;
+    }
+    const sumBreakdown = coverageBreakdown.reduce((sum, item) => sum + Number(item.limit || 0), 0);
+    if (sumBreakdown !== totalCoverage) {
+        toast.error(`Coverage Breakdown total (₹${sumBreakdown.toLocaleString()}) fails to match Total Coverage (₹${totalCoverage.toLocaleString()}).`);
+        return;
     }
 
     setInsuranceSubmitting(true);
     try {
       let insuranceDetails = { ...insuranceForm, insuranceDocuments: [] };
+      insuranceDetails.coverageBreakdown = coverageBreakdown.map(b => ({ sectionName: b.sectionName, limit: Number(b.limit) }));
       
       // Auto-populate providerName if it's a platform provider
       if (!insuranceDetails.isCustomProvider) {
@@ -304,12 +331,21 @@ export default function PatientDetail() {
         </div>
         <div>
           <p className="text-xs font-bold uppercase tracking-wider text-emerald-500 mb-1">Next Checkup</p>
-          <input 
-             type="date" 
-             value={patient.patientDetails?.nextCheckupDate ? new Date(patient.patientDetails.nextCheckupDate).toISOString().split('T')[0] : patient.nextCheckupDate || ""} 
-             onChange={(e) => handleCheckupUpdate(e.target.value)}
-             className="font-bold text-slate-800 text-sm bg-transparent border-none p-0 focus:ring-0 cursor-pointer"
-          />
+          {(() => {
+             const checkup = patient.patientDetails?.nextCheckupDate || patient.nextCheckupDate;
+             const isExpired = checkup && new Date(checkup) < new Date(new Date().setHours(0,0,0,0));
+             return (
+                 <div className="flex flex-col gap-1">
+                     <input 
+                         type="date" 
+                         value={checkup && !isExpired ? new Date(checkup).toISOString().split('T')[0] : ""} 
+                         onChange={(e) => handleCheckupUpdate(e.target.value)}
+                         className={`font-bold text-sm bg-transparent border-none p-0 focus:ring-0 cursor-pointer ${isExpired ? 'text-rose-500' : 'text-slate-800'}`}
+                     />
+                     {isExpired && <span className="text-[10px] font-bold text-rose-500 bg-rose-50 px-2 py-0.5 rounded-md w-fit">Expired - Renew Needed</span>}
+                 </div>
+             );
+          })()}
         </div>
       </div>
 
@@ -400,20 +436,51 @@ export default function PatientDetail() {
                       </div>
                       <div>
                         <p className="text-slate-500 font-semibold mb-1">Financials & Documents</p>
-                        <div className="bg-white p-3 rounded-xl border border-slate-200 mt-1 h-full">
-                           <p className="text-xs text-slate-500 uppercase font-bold tracking-wider">Coverage Limit</p>
-                           <p className="text-lg font-black text-indigo-600 mb-2">₹{(patient.patientDetails.insuranceDetails.coverageAmount || 0).toLocaleString()}</p>
-                           
-                           {/* Policy Document Links */}
-                           {patient.patientDetails.insuranceDetails.insuranceDocuments?.length > 0 && (
-                             <div className="pt-2 border-t border-slate-100">
-                                {patient.patientDetails.insuranceDetails.insuranceDocuments.map((doc, idx) => (
-                                  <a key={idx} href={doc.fileUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:text-blue-800 font-bold block mb-1">
-                                    📄 {doc.docName || "View Policy Document"}
-                                  </a>
-                                ))}
-                             </div>
-                           )}
+                        <div className="bg-white p-3 rounded-xl border border-slate-200 mt-1 h-full flex flex-col justify-between">
+                           <div>
+                               <p className="text-xs text-slate-500 uppercase font-bold tracking-wider">Coverage Limit</p>
+                               <p className="text-lg font-black text-indigo-600 mb-2">₹{(patient.patientDetails.insuranceDetails.coverageAmount || 0).toLocaleString()}</p>
+                               
+                               {/* Policy Document Links */}
+                               {patient.patientDetails.insuranceDetails.insuranceDocuments?.length > 0 && (
+                                 <div className="pt-2 border-t border-slate-100 mb-3">
+                                    {patient.patientDetails.insuranceDetails.insuranceDocuments.map((doc, idx) => (
+                                      <a key={idx} href={doc.fileUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:text-blue-800 font-bold block mb-1">
+                                        📄 {doc.docName || "View Policy Document"}
+                                      </a>
+                                    ))}
+                                 </div>
+                               )}
+                           </div>
+                           <button 
+                               onClick={() => {
+                                   const ins = patient.patientDetails.insuranceDetails;
+                                   setInsuranceForm({ 
+                                       providerId: ins.providerId || "", 
+                                       policyNumber: ins.policyNumber || "", 
+                                       validUpto: ins.validUpto ? new Date(ins.validUpto).toISOString().split('T')[0] : "", 
+                                       coverageAmount: ins.coverageAmount || "", 
+                                       memberId: ins.memberId || "",
+                                       isCustomProvider: ins.isCustomProvider || false, 
+                                       customProviderName: ins.customProviderName || "", 
+                                       customProviderEmail: ins.customProviderEmail || "", 
+                                       customProviderPhone: ins.customProviderPhone || ""
+                                   });
+                                   if (ins.coverageBreakdown && ins.coverageBreakdown.length > 0) {
+                                       setCoverageBreakdown(ins.coverageBreakdown);
+                                   } else {
+                                       setCoverageBreakdown([
+                                         { sectionName: "In-patient Hospitalization", limit: "" },
+                                         { sectionName: "Pre & Post Hospitalization", limit: "" },
+                                         { sectionName: "Day Care Procedures", limit: "" },
+                                       ]);
+                                   }
+                                   setShowInsuranceModal(true);
+                               }}
+                               className="w-full bg-indigo-50 text-indigo-700 border border-indigo-200 font-bold py-2 rounded-xl text-xs hover:bg-indigo-100 transition mt-2"
+                           >
+                               Update / Renew Insurance
+                           </button>
                         </div>
                       </div>
                    </div>
@@ -708,6 +775,50 @@ export default function PatientDetail() {
                     <label className="block text-sm font-semibold text-slate-700 mb-2">Valid Upto</label>
                     <input type="date" value={insuranceForm.validUpto} onChange={(e) => setInsuranceForm({ ...insuranceForm, validUpto: e.target.value })} className="w-full border border-slate-300 rounded-xl py-3 px-4 focus:ring-2 focus:ring-emerald-500 focus:outline-none transition text-slate-600" />
                   </div>
+                </div>
+
+                <div className="border-t border-slate-200 pt-5 mt-4">
+                    <div className="flex justify-between items-center mb-4">
+                        <label className="block text-sm font-bold text-slate-800">
+                           Segmented Coverage Limits *
+                        </label>
+                        <button type="button" onClick={addBreakdownRow} className="text-xs font-bold bg-white border border-slate-200 text-slate-700 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition shadow-sm">
+                            + Add Limit
+                        </button>
+                    </div>
+                    <div className="space-y-3">
+                        {coverageBreakdown.map((row, idx) => (
+                            <div key={idx} className="flex items-center gap-3">
+                                <input 
+                                    type="text" 
+                                    placeholder="Section Name (e.g. OPD)" 
+                                    value={row.sectionName}
+                                    onChange={(e) => handleBreakdownChange(idx, 'sectionName', e.target.value)}
+                                    className="flex-1 border border-slate-200 rounded-xl py-2 px-3 text-sm focus:ring-emerald-500 focus:outline-none"
+                                    required
+                                />
+                                <div className="relative w-1/3">
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">₹</span>
+                                    <input 
+                                        type="number" 
+                                        placeholder="Limit" 
+                                        value={row.limit}
+                                        onChange={(e) => handleBreakdownChange(idx, 'limit', e.target.value)}
+                                        className="w-full border border-slate-200 rounded-xl py-2 pl-7 pr-3 text-sm font-bold text-slate-700 focus:ring-emerald-500 focus:outline-none"
+                                        required
+                                    />
+                                </div>
+                                <button type="button" onClick={() => removeBreakdownRow(idx)} className="w-8 h-8 rounded-full bg-rose-50 text-rose-500 flex items-center justify-center font-bold hover:bg-rose-100 transition">✖</button>
+                            </div>
+                        ))}
+                    </div>
+                    
+                    <div className="mt-4 pt-4 border-t border-slate-100 flex justify-between items-center">
+                        <p className="text-xs font-bold text-slate-500 tracking-wider uppercase">Allocated Sum</p>
+                        <p className={`text-lg font-black ${coverageBreakdown.reduce((sum, item) => sum + Number(item.limit || 0), 0) === Number(insuranceForm.coverageAmount || 0) && Number(insuranceForm.coverageAmount) > 0 ? 'text-emerald-600' : 'text-rose-500'}`}>
+                            ₹{coverageBreakdown.reduce((sum, item) => sum + Number(item.limit || 0), 0).toLocaleString()} <span className="text-xs text-slate-500">/ ₹{Number(insuranceForm.coverageAmount || 0).toLocaleString()}</span>
+                        </p>
+                    </div>
                 </div>
 
                 <div className="flex justify-end gap-3 pt-6 border-t border-slate-100 mt-6">

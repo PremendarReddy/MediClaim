@@ -16,6 +16,35 @@ export default function PatientReports() {
 
   const [analyzing, setAnalyzing] = useState(false);
   const [aiInsight, setAiInsight] = useState(null);
+  const navigate = useNavigate();
+
+  const handleDownload = async (fileUrl, fileName) => {
+    if (!fileUrl) {
+       toast.error("No valid file URL available.");
+       return;
+    }
+    if (fileUrl.startsWith('mock-storage://')) {
+       toast.info(`Simulated download: ${fileUrl.replace('mock-storage://', '')}`);
+       return;
+    }
+    try {
+        toast.info("Initiating secure download...");
+        // If fileUrl is fully qualified or relative, axios can handle it.
+        const response = await api.get(fileUrl, { responseType: 'blob' });
+        const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.setAttribute('download', fileName || 'Document.pdf');
+        document.body.appendChild(link);
+        link.click();
+        link.parentNode.removeChild(link);
+        window.URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+        // Fallback natively to window.open if CORS or strict headers block blob streams
+        window.open(fileUrl, '_blank', 'noreferrer');
+        toast.warning("File opened in new tab. Browser blocked native download.");
+    }
+  };
 
   useEffect(() => {
     fetchPatientProfile();
@@ -44,15 +73,18 @@ export default function PatientReports() {
         try {
            const claimsRes = await api.get('/patients/claims');
            if (claimsRes.data.success) {
+               const vaultedUrls = vaultedDocs.map(d => d.fileUrl).filter(Boolean);
                claimDocs = claimsRes.data.data.flatMap(claim => 
-                  (claim.documents || []).map(doc => ({
-                     ...doc,
-                     id: doc._id,
-                     type: doc.docType || 'General',
-                     name: doc.docType || 'Claim Document', 
-                     date: claim.createdAt,
-                     doctorName: claim.hospitalId?.name,
-                     status: doc.verified ? 'Verified' : (doc.received ? 'Received' : 'Uploaded')
+                  (claim.documents || [])
+                    .filter(doc => !vaultedUrls.includes(doc.fileUrl))
+                    .map(doc => ({
+                       ...doc,
+                       id: doc._id,
+                       type: doc.docType || 'General',
+                       name: doc.docType || 'Claim Document', 
+                       date: claim.createdAt,
+                       doctorName: claim.hospitalId?.name,
+                       status: doc.verified ? 'Verified' : (doc.received ? 'Received' : 'Uploaded')
                   }))
                );
            }
@@ -298,20 +330,28 @@ export default function PatientReports() {
               </div>
 
               <div className="space-y-3 pt-2">
-                <button 
-                  onClick={() => {
-                     if (selectedReport.fileUrl && selectedReport.fileUrl.startsWith('mock-storage://')) {
-                       toast.info(`Simulated view: ${selectedReport.fileUrl.replace('mock-storage://', '')}`);
-                     } else if (selectedReport.fileUrl) {
-                       window.open(selectedReport.fileUrl, '_blank', 'noreferrer');
-                     } else {
-                       toast.error('No valid file URL found.');
-                     }
-                  }}
-                  className="w-full bg-indigo-600 text-white font-bold py-3.5 rounded-xl hover:bg-indigo-700 shadow-lg shadow-indigo-600/30 transition flex items-center justify-center gap-2"
-                >
-                  <span>📥</span> View & Download Securely
-                </button>
+                <div className="flex gap-3">
+                  <button 
+                    onClick={() => {
+                       if (selectedReport.fileUrl && selectedReport.fileUrl.startsWith('mock-storage://')) {
+                         toast.info(`Simulated view: ${selectedReport.fileUrl.replace('mock-storage://', '')}`);
+                       } else if (selectedReport.fileUrl) {
+                         window.open(selectedReport.fileUrl, '_blank', 'noreferrer');
+                       } else {
+                         toast.error('No valid file URL found.');
+                       }
+                    }}
+                    className="flex-1 bg-white/10 text-white font-bold py-3.5 rounded-xl hover:bg-white/20 border border-white/10 transition flex items-center justify-center gap-2"
+                  >
+                    <span>👁️</span> View
+                  </button>
+                  <button 
+                    onClick={() => handleDownload(selectedReport.fileUrl, selectedReport.name || selectedReport.title || "Document")}
+                    className="flex-1 bg-indigo-600 text-white font-bold py-3.5 rounded-xl hover:bg-indigo-700 shadow-lg shadow-indigo-600/30 transition flex items-center justify-center gap-2"
+                  >
+                    <span>📥</span> Download
+                  </button>
+                </div>
                 <div className="grid grid-cols-2 gap-3">
                   <button className="w-full bg-white/10 text-white font-bold py-3.5 rounded-xl hover:bg-white/20 border border-white/10 transition flex items-center justify-center gap-2">
                     <span>📤</span> Share

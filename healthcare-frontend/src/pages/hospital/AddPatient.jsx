@@ -46,8 +46,26 @@ export default function AddPatient() {
     customProviderName: "",
     customProviderEmail: "",
     customProviderPhone: "",
-    customProviderCoverage: "",
+    coverageAmount: "",
   });
+
+  const [coverageBreakdown, setCoverageBreakdown] = useState([
+     { sectionName: "In-patient Hospitalization", limit: "" },
+     { sectionName: "Pre & Post Hospitalization", limit: "" },
+     { sectionName: "Day Care Procedures", limit: "" },
+  ]);
+
+  const addBreakdownRow = () => {
+      setCoverageBreakdown([...coverageBreakdown, { sectionName: "", limit: "" }]);
+  };
+  const removeBreakdownRow = (index) => {
+      setCoverageBreakdown(coverageBreakdown.filter((_, i) => i !== index));
+  };
+  const handleBreakdownChange = (index, field, value) => {
+      const updated = [...coverageBreakdown];
+      updated[index][field] = value;
+      setCoverageBreakdown(updated);
+  };
 
   const handleInputChange = (e) => {
     const { name, value, type, files } = e.target;
@@ -76,6 +94,18 @@ export default function AddPatient() {
       setErrors(formErrors);
       setTouched({ name: true, email: true, phone: true });
       return;
+    }
+
+    if (formData.insuranceProvider) {
+         if (!formData.coverageAmount || Number(formData.coverageAmount) <= 0) {
+             toast.error("Please explicitly declare the overall Total Coverage Amount.");
+             return;
+         }
+         const sumBreakdown = coverageBreakdown.reduce((sum, item) => sum + Number(item.limit || 0), 0);
+         if (sumBreakdown !== Number(formData.coverageAmount)) {
+             toast.error(`Coverage Breakdown total (₹${sumBreakdown.toLocaleString()}) fails to match Total Coverage (₹${Number(formData.coverageAmount).toLocaleString()}).`);
+             return;
+         }
     }
 
     setLoading(true);
@@ -110,23 +140,27 @@ export default function AddPatient() {
       let insuranceDetailsPayload = undefined;
       
       if (formData.insuranceProvider) {
+          const baseInsurance = {
+              policyNumber: formData.policyNumber,
+              memberId: formData.memberId,
+              coverageAmount: Number(formData.coverageAmount),
+              coverageBreakdown: coverageBreakdown.map(b => ({ sectionName: b.sectionName, limit: Number(b.limit) }))
+          };
+
          if (formData.insuranceProvider === 'others') {
             insuranceDetailsPayload = {
+               ...baseInsurance,
                isCustomProvider: true,
                customProviderName: formData.customProviderName,
                customProviderEmail: formData.customProviderEmail,
                customProviderPhone: formData.customProviderPhone,
-               coverageAmount: formData.customProviderCoverage,
-               policyNumber: formData.policyNumber,
-               memberId: formData.memberId,
             };
          } else {
              const selectedProvider = insuranceCompanies.find(c => c._id === formData.insuranceProvider);
              insuranceDetailsPayload = {
+                ...baseInsurance,
                 providerId: formData.insuranceProvider,
                 providerName: selectedProvider ? selectedProvider.name : "",
-                policyNumber: formData.policyNumber,
-                memberId: formData.memberId,
              };
          }
       }
@@ -421,19 +455,6 @@ export default function AddPatient() {
                               required
                             />
                           </div>
-                          <div>
-                            <label className="block text-sm font-semibold text-slate-700 mb-1.5">
-                              Coverage Amount (₹)
-                            </label>
-                            <input
-                              type="number"
-                              name="customProviderCoverage"
-                              value={formData.customProviderCoverage}
-                              onChange={handleInputChange}
-                              placeholder="500000"
-                              className="w-full border border-slate-200 focus:ring-blue-500 focus:outline-none focus:ring-2 rounded-xl py-2.5 px-3"
-                            />
-                          </div>
                         </>
                     )}
                     <div>
@@ -478,6 +499,70 @@ export default function AddPatient() {
                   </>
                 )}
               </div>
+
+              {formData.insuranceProvider && (
+                  <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 mt-6">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                          <div>
+                            <label className="block text-sm font-bold text-slate-800 mb-1.5">
+                              Total Insured Coverage (₹) *
+                            </label>
+                            <input
+                              type="number"
+                              name="coverageAmount"
+                              value={formData.coverageAmount}
+                              onChange={handleInputChange}
+                              placeholder="e.g. 500000"
+                              className="w-full border border-indigo-200 bg-white ring-4 ring-indigo-50/50 focus:ring-indigo-500 focus:outline-none rounded-xl py-2.5 px-3 font-bold text-indigo-700"
+                              required
+                            />
+                          </div>
+                      </div>
+                      <div className="border-t border-slate-200 pt-5">
+                          <div className="flex justify-between items-center mb-4">
+                              <label className="block text-sm font-bold text-slate-800">
+                                Segmented Coverage Limits
+                              </label>
+                              <button type="button" onClick={addBreakdownRow} className="text-xs font-bold bg-white border border-slate-200 text-slate-700 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition shadow-sm">
+                                  + Add Limit
+                              </button>
+                          </div>
+                          <div className="space-y-3">
+                              {coverageBreakdown.map((row, idx) => (
+                                  <div key={idx} className="flex items-center gap-3">
+                                      <input 
+                                          type="text" 
+                                          placeholder="Section Name (e.g. OPD)" 
+                                          value={row.sectionName}
+                                          onChange={(e) => handleBreakdownChange(idx, 'sectionName', e.target.value)}
+                                          className="flex-1 border border-slate-200 rounded-xl py-2 px-3 text-sm focus:ring-blue-500 focus:outline-none"
+                                          required
+                                      />
+                                      <div className="relative w-1/3">
+                                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">₹</span>
+                                          <input 
+                                              type="number" 
+                                              placeholder="Limit" 
+                                              value={row.limit}
+                                              onChange={(e) => handleBreakdownChange(idx, 'limit', e.target.value)}
+                                              className="w-full border border-slate-200 rounded-xl py-2 pl-7 pr-3 text-sm font-bold text-slate-700 focus:ring-blue-500 focus:outline-none"
+                                              required
+                                          />
+                                      </div>
+                                      <button type="button" onClick={() => removeBreakdownRow(idx)} className="w-8 h-8 rounded-full bg-rose-50 text-rose-500 flex items-center justify-center font-bold hover:bg-rose-100 transition">✖</button>
+                                  </div>
+                              ))}
+                          </div>
+                          
+                          <div className="mt-4 pt-4 border-t border-slate-200 flex justify-between items-center">
+                              <p className="text-xs font-bold text-slate-500 tracking-wider uppercase">Allocated Sum</p>
+                              <p className={`text-lg font-black ${coverageBreakdown.reduce((sum, item) => sum + Number(item.limit || 0), 0) === Number(formData.coverageAmount || 0) && Number(formData.coverageAmount) > 0 ? 'text-emerald-600' : 'text-rose-500'}`}>
+                                  ₹{coverageBreakdown.reduce((sum, item) => sum + Number(item.limit || 0), 0).toLocaleString()} <span className="text-xs text-slate-500">/ ₹{Number(formData.coverageAmount || 0).toLocaleString()}</span>
+                              </p>
+                          </div>
+                      </div>
+                  </div>
+              )}
 
               <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100 flex items-start gap-3">
                 <div className="text-blue-500 text-xl">ℹ️</div>

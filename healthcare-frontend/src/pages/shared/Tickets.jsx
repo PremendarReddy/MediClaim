@@ -10,6 +10,7 @@ export default function Tickets({ role }) {
   const [form, setForm] = useState({
     subject: "",
     message: "",
+    targetRole: "INSURANCE"
   });
 
   useEffect(() => {
@@ -40,6 +41,7 @@ export default function Tickets({ role }) {
         subject: form.subject,
         message: form.message,
         raisedByRole: role.toUpperCase(),
+        targetRole: form.targetRole,
       });
       if (response.data.success) {
         toast.success("Support ticket submitted.");
@@ -83,6 +85,16 @@ export default function Tickets({ role }) {
               className="w-full border rounded-lg px-3 py-2"
               required
             />
+            
+            <select
+              value={form.targetRole}
+              onChange={(e) => setForm({ ...form, targetRole: e.target.value })}
+              className="w-full border rounded-lg px-3 py-2 font-medium"
+              required
+            >
+              <option value="INSURANCE">Route To: Insurance Provider</option>
+              <option value="HOSPITAL">Route To: My Connected Hospital</option>
+            </select>
 
             <textarea
               placeholder="Describe your issue"

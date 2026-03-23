@@ -119,9 +119,18 @@ export const updateUserProfile = async (req, res) => {
         if (user) {
             user.name = req.body.name || user.name;
             
-            if (user.role === 'PATIENT' && req.body.phone) {
+            if (user.role === 'PATIENT') {
                 if (!user.patientDetails) user.patientDetails = {};
-                user.patientDetails.phoneNumber = req.body.phone;
+                if (req.body.phone) {
+                    user.patientDetails.phoneNumber = req.body.phone;
+                }
+                if (req.body.emergencyContact) {
+                    user.patientDetails.emergencyContact = {
+                        name: req.body.emergencyContact.name || user.patientDetails.emergencyContact?.name,
+                        relation: req.body.emergencyContact.relation || user.patientDetails.emergencyContact?.relation,
+                        phone: req.body.emergencyContact.phone || user.patientDetails.emergencyContact?.phone
+                    };
+                }
             }
             
             await user.save();

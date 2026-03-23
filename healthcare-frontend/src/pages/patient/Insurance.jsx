@@ -58,7 +58,8 @@ export default function PatientInsurance() {
             totalLimit: limit,
             usedAmount: usedFromClaims,
             validUpto: insDetails.validUpto ? new Date(insDetails.validUpto).toLocaleDateString() : "N/A",
-            insuranceDocuments: insDetails.insuranceDocuments || []
+            insuranceDocuments: insDetails.insuranceDocuments || [],
+            coverageBreakdown: insDetails.coverageBreakdown || []
           };
           setInsuranceData(newData);
       } else {
@@ -70,7 +71,8 @@ export default function PatientInsurance() {
             totalLimit: 0,
             usedAmount: 0,
             validUpto: "N/A",
-            insuranceDocuments: []
+            insuranceDocuments: [],
+            coverageBreakdown: []
           });
       }
 
@@ -155,18 +157,24 @@ export default function PatientInsurance() {
             <div className="flex justify-between items-end mb-4">
               <div>
                 <h3 className="font-bold text-slate-800 text-lg">Annual Policy Utilization</h3>
-                <p className="text-sm text-slate-500 mt-1">You have consumed {usagePercentage.toFixed(1)}% of your limit</p>
+                {insuranceData.status === "Uninsured" ? (
+                    <p className="text-sm text-rose-500 font-bold mt-1">No claimable funds available.</p>
+                ) : (
+                    <p className="text-sm text-slate-500 mt-1">You have consumed {usagePercentage.toFixed(1)}% of your limit</p>
+                )}
               </div>
               <div className="text-right">
                 <span className="text-xs font-bold text-slate-400 tracking-wider">AVAILABLE</span>
-                <p className="font-black text-indigo-600 text-xl">{(100 - usagePercentage).toFixed(1)}%</p>
+                <p className={`font-black text-xl ${insuranceData.status === "Uninsured" ? "text-rose-500" : "text-indigo-600"}`}>
+                   {insuranceData.status === "Uninsured" ? "0%" : `${(100 - usagePercentage).toFixed(1)}%`}
+                </p>
               </div>
             </div>
 
             <div className="w-full bg-slate-100 rounded-full h-4 mb-4 relative overflow-hidden p-1">
               <motion.div
                 initial={{ width: 0 }}
-                animate={{ width: `${Math.min(usagePercentage, 100)}%` }}
+                animate={{ width: insuranceData.status === "Uninsured" ? '0%' : `${Math.min(usagePercentage, 100)}%` }}
                 transition={{ duration: 1, ease: "easeOut" }}
                 className={`h-full rounded-full transition-all bg-gradient-to-r relative ${usagePercentage > 80 ? 'from-amber-400 to-rose-500' : 'from-indigo-400 to-indigo-600'}`}
               >
@@ -210,33 +218,28 @@ export default function PatientInsurance() {
                       <div className="w-6 h-6 rounded-full bg-blue-50 text-blue-500 flex items-center justify-center text-xs">📋</div>
                       Treatment Eligibility
                     </h3>
-                    {[
-                        { name: "In-patient Hospitalization", limit: insuranceData.totalLimit, covered: true },
-                        { name: "Pre & Post Hospitalization", limit: insuranceData.totalLimit * 0.1, covered: true },
-                        { name: "Day Care Procedures", limit: insuranceData.totalLimit * 0.2, covered: true },
-                        { name: "Maternity Coverage", limit: insuranceData.totalLimit * 0.1, covered: true },
-                        { name: "OPD Consultation", limit: 0, covered: false }
-                      ].map((treatment) => (
-                      <div
-                        key={treatment.name}
-                        className="bg-slate-50 border border-slate-100 rounded-2xl p-4 flex justify-between items-center group cursor-pointer hover:border-indigo-100 transition-colors"
-                      >
-                        <div className="flex-1 pr-4">
-                          <p className="font-bold text-slate-800 text-sm">{treatment.name}</p>
-                          <p className="text-xs font-bold text-slate-400 mt-1 uppercase">
-                            Limit: <span className="text-slate-600">₹{treatment.limit?.toLocaleString() || "N/A"}</span>
-                          </p>
+                    {insuranceData.coverageBreakdown && insuranceData.coverageBreakdown.length > 0 ? (
+                        insuranceData.coverageBreakdown.map((treatment, idx) => (
+                           <div
+                             key={idx}
+                             className="bg-slate-50 border border-slate-100 rounded-2xl p-4 flex justify-between items-center group cursor-pointer hover:border-indigo-100 transition-colors"
+                           >
+                              <div className="flex-1 pr-4">
+                                <p className="font-bold text-slate-800 text-sm">{treatment.sectionName}</p>
+                                <p className="text-xs font-bold text-slate-400 mt-1 uppercase">
+                                  Limit: <span className="text-slate-600">₹{treatment.limit?.toLocaleString() || "0"}</span>
+                                </p>
+                              </div>
+                              <span className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 bg-emerald-100 text-emerald-600">
+                                ✓
+                              </span>
+                           </div>
+                        ))
+                    ) : (
+                        <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 text-center">
+                            <p className="text-sm font-semibold text-slate-500">No segmented coverage limits have been registered for this policy.</p>
                         </div>
-                        <span
-                          className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${treatment.covered
-                            ? "bg-emerald-100 text-emerald-600"
-                            : "bg-slate-200 text-slate-400"
-                            }`}
-                        >
-                          {treatment.covered ? "✓" : "✖"}
-                        </span>
-                      </div>
-                    ))}
+                    )}
                   </motion.div>
                 )}
 

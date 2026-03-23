@@ -248,10 +248,16 @@ export default function CreateClaim() {
 
     let availableBalance = null;
     let isExceeding = false;
+    let isExpired = false;
     
     if (formData.patientId) {
         const selectedPatient = patients.find(p => p._id === formData.patientId);
         if (selectedPatient?.patientDetails?.insuranceDetails) {
+            const ins = selectedPatient.patientDetails.insuranceDetails;
+            if (ins.validUpto) {
+                isExpired = new Date(ins.validUpto) < new Date();
+            }
+            
             const coverageLimit = Number(selectedPatient.patientDetails.insuranceDetails.coverageAmount) || 0;
             const used = hospitalClaims
                 .filter(c => c.patientId?._id === selectedPatient._id && ["Approved", "Amount Released"].includes(c.status))
@@ -314,8 +320,10 @@ export default function CreateClaim() {
                                                 const ins = p.patientDetails.insuranceDetails;
                                                 return (
                                                     <span className="flex items-center gap-2">
-                                                        <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                                                        {ins.providerName || ins.customProviderName || "Unknown Insurer"} 
+                                                        <span className={`w-2 h-2 rounded-full ${isExpired ? 'bg-rose-500' : 'bg-emerald-500'}`}></span>
+                                                        <span className={isExpired ? 'text-rose-600 line-through opacity-70' : ''}>
+                                                            {ins.providerName || ins.customProviderName || "Unknown Insurer"}
+                                                        </span> 
                                                         <span className="text-xs text-slate-400 font-mono ml-2">({ins.policyNumber || "No Policy ID"})</span>
                                                     </span>
                                                 );
@@ -326,6 +334,12 @@ export default function CreateClaim() {
                                         "Select a patient first"
                                     )}
                                 </div>
+                                {isExpired && (
+                                    <div className="mt-3 p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-600 text-sm font-bold flex items-start gap-3">
+                                        <span className="text-xl leading-none">⚠️</span>
+                                        <span>Claim initiation cannot be done . patient insurance date got expired , please inform the patient to ether renew the insurance or take new insurance .</span>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -490,7 +504,7 @@ export default function CreateClaim() {
                             whileHover={{ scale: 1.02 }}
                             whileTap={{ scale: 0.98 }}
                             type="submit"
-                            disabled={otpSending || patients.length === 0 || isExceeding}
+                            disabled={otpSending || patients.length === 0 || isExceeding || isExpired}
                             className="bg-blue-600 text-white px-8 py-3 rounded-xl hover:bg-blue-700 shadow-lg shadow-blue-500/30 disabled:opacity-50 disabled:cursor-not-allowed font-bold transition-all text-lg"
                         >
                             {otpSending ? "Sending OTP..." : "Initiate Claim"}

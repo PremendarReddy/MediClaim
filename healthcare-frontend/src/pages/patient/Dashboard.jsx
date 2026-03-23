@@ -50,11 +50,16 @@ export default function PatientDashboard() {
             }
         } catch(e) { console.error("Analytics pull failed."); }
 
+        let checkupDate = liveProfile.patientDetails?.nextCheckupDate;
+        if (checkupDate && new Date(checkupDate) < new Date(new Date().setHours(0,0,0,0))) {
+             checkupDate = "Not Scheduled";
+        }
+
         setPatientData({ 
            ...user, 
            claims: claimsRes.data.data,
            contextStatus: liveProfile.patientDetails?.status || "Active",
-           nextCheckup: liveProfile.patientDetails?.nextCheckupDate || "Not Scheduled",
+           nextCheckup: checkupDate || "Not Scheduled",
            bookedSlots: myBookedSlots
         });
       }

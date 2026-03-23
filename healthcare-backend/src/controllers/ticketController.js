@@ -5,16 +5,30 @@ import Ticket from '../models/Ticket.js';
 // @access  Private (Patient/Hospital)
 export const createTicket = async (req, res) => {
     try {
-        const { subject, message, raisedByRole } = req.body;
+        const { subject, message, raisedByRole, targetRole } = req.body;
         
         if (!['HOSPITAL', 'PATIENT'].includes(raisedByRole)) {
             return res.status(400).json({ success: false, message: 'Invalid role for raising a ticket.' });
+        }
+
+        // Dynamically resolve targetId if patient
+        let targetId = null;
+        if (raisedByRole === 'PATIENT' && req.user.patientDetails) {
+             if (targetRole === 'HOSPITAL') {
+                  targetId = req.user.patientDetails.registeredByHospital;
+             } else if (targetRole === 'INSURANCE' && req.user.patientDetails.insuranceDetails) {
+                  targetId = req.user.patientDetails.insuranceDetails.providerId || null;
+             }
+        } else if (raisedByRole === 'HOSPITAL') {
+             targetId = null; // usually goes to Insurance/Admin
         }
 
         const ticket = await Ticket.create({
             subject,
             message,
             raisedByRole,
+            targetRole: targetRole || 'INSURANCE',
+            targetId,
             userId: req.user._id,
             status: 'Open'
         });
@@ -42,7 +56,12 @@ export const getMyTickets = async (req, res) => {
 // @access  Private (Insurance/Admin)
 export const getAllTickets = async (req, res) => {
     try {
-        const tickets = await Ticket.find({}).populate('userId', 'name email role').sort({ createdAt: -1 });
+        let query = {};
+        if (req.user.role === 'HOSPITAL' || req.user.role === 'INSURANCE') {
+            query.targetId = req.user._id;
+        }
+
+        const tickets = await Ticket.find(query).populate('userId', 'name email role').sort({ createdAt: -1 });
         res.json({ success: true, count: tickets.length, data: tickets });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });

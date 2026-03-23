@@ -71,6 +71,10 @@ const userSchema = new mongoose.Schema(
                 customProviderName: String,
                 customProviderEmail: String,
                 customProviderPhone: String,
+                coverageBreakdown: [{
+                     sectionName: { type: String, required: true },
+                     limit: { type: Number, required: true }
+                }],
                 insuranceDocuments: [{
                     docName: String,
                     fileUrl: String,

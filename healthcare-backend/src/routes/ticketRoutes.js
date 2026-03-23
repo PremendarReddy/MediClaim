@@ -6,7 +6,7 @@ const router = express.Router();
 
 router.route('/')
     .post(protect, authorize('PATIENT', 'HOSPITAL'), createTicket)
-    .get(protect, authorize('INSURANCE', 'ADMIN'), getAllTickets);
+    .get(protect, authorize('INSURANCE', 'ADMIN', 'HOSPITAL'), getAllTickets);
 
 router.route('/my')
     .get(protect, authorize('PATIENT', 'HOSPITAL'), getMyTickets);

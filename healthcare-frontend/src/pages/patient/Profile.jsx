@@ -1,11 +1,42 @@
+import { useState } from "react";
 import { motion } from "framer-motion";
 import DashboardLayout from "../../layouts/DashboardLayout";
 import { useAuth } from "../../context/AuthContext";
-import { User, Mail, Calendar, HeartPulse, FileText, Phone, MapPin, AlertCircle, Fingerprint, Activity } from "lucide-react";
+import { User, Mail, Calendar, HeartPulse, FileText, Phone, MapPin, AlertCircle, Fingerprint, Activity, Edit3, Check, X } from "lucide-react";
+import api from "../../api/axios";
+import { toast } from "react-toastify";
 
 export default function Profile() {
-    const { user } = useAuth();
+    const { user, login } = useAuth(); // use login to refresh context
     const pd = user?.patientDetails || {};
+
+    const [isEditingEmergency, setIsEditingEmergency] = useState(false);
+    const [emergencyForm, setEmergencyForm] = useState({
+        name: pd?.emergencyContact?.name || "",
+        relation: pd?.emergencyContact?.relation || "",
+        phone: pd?.emergencyContact?.phone || ""
+    });
+
+    const [saving, setSaving] = useState(false);
+
+    const handleSaveEmergency = async () => {
+        try {
+            setSaving(true);
+            const response = await api.put('/auth/profile', {
+                emergencyContact: emergencyForm
+            });
+            if (response.data.success) {
+                // Refresh local DOM by mutating AuthContext natively or simple window reload
+                toast.success("Emergency contacts updated seamlessly!");
+                setIsEditingEmergency(false);
+                setTimeout(() => window.location.reload(), 800);
+            }
+        } catch (error) {
+            toast.error("Failed to merge emergency details.");
+        } finally {
+            setSaving(false);
+        }
+    };
 
     return (
         <DashboardLayout>
@@ -120,21 +151,82 @@ export default function Profile() {
 
                         {/* Emergency Overrides */}
                         <div className="bg-rose-50 dark:bg-rose-900/10 rounded-3xl p-6 border border-rose-100 dark:border-rose-900/30 relative overflow-hidden">
-                            <h2 className="text-lg font-bold text-rose-800 dark:text-rose-400 mb-4 flex items-center gap-2">
-                                <AlertCircle className="w-5 h-5" />
-                                Emergency Protocols
-                            </h2>
-                            <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-rose-100 dark:border-rose-800/50 flex flex-col md:flex-row items-center gap-6 justify-between">
-                                 <div>
-                                    <p className="text-xs text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider mb-1">Primary Override Contact</p>
-                                    <p className="text-lg font-bold text-slate-800 dark:text-white">{pd?.emergencyContact?.name || 'Unspecified'}</p>
-                                    <p className="text-sm font-medium text-rose-600 dark:text-rose-400">{pd?.emergencyContact?.relation || 'Relation Unbound'}</p>
-                                 </div>
-                                 <div className="bg-rose-100 dark:bg-rose-900/30 px-6 py-3 rounded-xl w-full md:w-auto text-center border border-rose-200 dark:border-rose-800">
-                                    <p className="text-xs font-bold text-rose-800 dark:text-rose-300 uppercase mb-1">Emergency Dispatch</p>
-                                    <p className="font-mono text-lg font-bold text-rose-900 dark:text-rose-100 tracking-wider">{pd?.emergencyContact?.phone || 'N/A'}</p>
-                                 </div>
+                            <div className="flex justify-between items-center mb-4 relative z-10">
+                                <h2 className="text-lg font-bold text-rose-800 dark:text-rose-400 flex items-center gap-2">
+                                    <AlertCircle className="w-5 h-5" />
+                                    Emergency Protocols
+                                </h2>
+                                {!isEditingEmergency ? (
+                                    <button 
+                                        onClick={() => setIsEditingEmergency(true)}
+                                        className="text-xs font-bold text-rose-600 bg-white px-3 py-1.5 rounded-lg shadow-sm border border-rose-200 hover:bg-rose-50 flex items-center gap-1 transition"
+                                    >
+                                        <Edit3 className="w-3.5 h-3.5" /> Edit
+                                    </button>
+                                ) : (
+                                    <div className="flex gap-2">
+                                        <button 
+                                            onClick={() => setIsEditingEmergency(false)}
+                                            className="text-xs font-bold text-slate-500 bg-white px-3 py-1.5 rounded-lg shadow-sm border border-slate-200 hover:bg-slate-50 flex items-center gap-1 transition"
+                                        >
+                                            <X className="w-3.5 h-3.5" /> Cancel
+                                        </button>
+                                        <button 
+                                            onClick={handleSaveEmergency}
+                                            disabled={saving}
+                                            className="text-xs font-bold text-white bg-rose-600 px-3 py-1.5 rounded-lg shadow-md hover:bg-rose-700 flex items-center gap-1 transition disabled:opacity-50"
+                                        >
+                                            <Check className="w-3.5 h-3.5" /> {saving ? "Saving..." : "Save"}
+                                        </button>
+                                    </div>
+                                )}
                             </div>
+                            
+                            {!isEditingEmergency ? (
+                                <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-rose-100 dark:border-rose-800/50 flex flex-col md:flex-row items-center gap-6 justify-between relative z-10">
+                                     <div>
+                                        <p className="text-xs text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider mb-1">Primary Override Contact</p>
+                                        <p className="text-lg font-bold text-slate-800 dark:text-white">{pd?.emergencyContact?.name || 'Unspecified'}</p>
+                                        <p className="text-sm font-medium text-rose-600 dark:text-rose-400">{pd?.emergencyContact?.relation || 'Relation Unbound'}</p>
+                                     </div>
+                                     <div className="bg-rose-100 dark:bg-rose-900/30 px-6 py-3 rounded-xl w-full md:w-auto text-center border border-rose-200 dark:border-rose-800">
+                                        <p className="text-xs font-bold text-rose-800 dark:text-rose-300 uppercase mb-1">Emergency Dispatch</p>
+                                        <p className="font-mono text-lg font-bold text-rose-900 dark:text-rose-100 tracking-wider">{pd?.emergencyContact?.phone || 'N/A'}</p>
+                                     </div>
+                                </div>
+                            ) : (
+                                <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm border border-rose-200 dark:border-rose-800/50 relative z-10 space-y-4">
+                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                         <div>
+                                             <label className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-1 block">Contact Name</label>
+                                             <input 
+                                                value={emergencyForm.name} 
+                                                onChange={(e) => setEmergencyForm({...emergencyForm, name: e.target.value})}
+                                                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-rose-500" 
+                                                placeholder="e.g. Jane Doe"
+                                             />
+                                         </div>
+                                         <div>
+                                             <label className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-1 block">Relation</label>
+                                             <input 
+                                                value={emergencyForm.relation} 
+                                                onChange={(e) => setEmergencyForm({...emergencyForm, relation: e.target.value})}
+                                                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-rose-500" 
+                                                placeholder="e.g. Spouse, Sibling"
+                                             />
+                                         </div>
+                                         <div className="sm:col-span-2">
+                                             <label className="text-xs font-bold text-rose-700 uppercase tracking-wider mb-1 block">Dispatch Phone</label>
+                                             <input 
+                                                value={emergencyForm.phone} 
+                                                onChange={(e) => setEmergencyForm({...emergencyForm, phone: e.target.value})}
+                                                className="w-full border border-rose-200 bg-rose-50 text-rose-900 font-mono rounded-lg px-3 py-2 text-sm focus:ring-rose-500" 
+                                                placeholder="+1 (555) 000-0000"
+                                             />
+                                         </div>
+                                     </div>
+                                </div>
+                            )}
                         </div>
 
                     </motion.div>
