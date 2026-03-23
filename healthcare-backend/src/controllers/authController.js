@@ -125,18 +125,29 @@ export const updateUserProfile = async (req, res) => {
                     user.patientDetails.phoneNumber = req.body.phone;
                 }
                 if (req.body.emergencyContact) {
+                    console.log("INCOMING EMERGENCY:", req.body.emergencyContact);
+                    
                     user.patientDetails.emergencyContact = {
-                        name: req.body.emergencyContact.name || user.patientDetails.emergencyContact?.name,
-                        relation: req.body.emergencyContact.relation || user.patientDetails.emergencyContact?.relation,
-                        phone: req.body.emergencyContact.phone || user.patientDetails.emergencyContact?.phone
+                        name: req.body.emergencyContact.name || user.patientDetails.emergencyContact?.name || "",
+                        relation: req.body.emergencyContact.relation || user.patientDetails.emergencyContact?.relation || "",
+                        phone: req.body.emergencyContact.phone || user.patientDetails.emergencyContact?.phone || ""
                     };
+                    
+                    console.log("MAPPED EMERGENCY:", user.patientDetails.emergencyContact);
                 }
             }
             
+            user.markModified('patientDetails');
             await user.save();
             res.json({
                 success: true,
-                data: { _id: user._id, name: user.name, email: user.email, role: user.role }
+                data: { 
+                    _id: user._id, 
+                    name: user.name, 
+                    email: user.email, 
+                    role: user.role, 
+                    patientDetails: user.patientDetails || undefined 
+                }
             });
         } else {
             res.status(404).json({ success: false, message: 'User not found' });

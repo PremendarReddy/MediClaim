@@ -42,7 +42,11 @@ const userSchema = new mongoose.Schema(
             address: String,
             phoneNumber: String,
             aadhar: String,
-            emergencyContact: String,
+            emergencyContact: {
+                name: String,
+                relation: String,
+                phone: String
+            },
             status: {
                 type: String,
                 enum: ['Pending', 'Active', 'Discharged'],
