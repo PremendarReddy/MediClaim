@@ -186,6 +186,12 @@ Data:
 - Claim Request Amount (INR): ${totalAmount}
 - Attached Documents Count: ${uploadCount}
 
+Guidelines:
+- If Claim Request Amount > 500,000 INR, strongly consider HIGH risk.
+- If Claim Request Amount > 100,000 INR, consider MEDIUM risk.
+- If Attached Documents Count is lower than 3, elevate the risk.
+- Base your final decision on a combination of these factors.
+
 Schema required:
 {
   "riskLevel": "LOW", // MUST BE "LOW", "MEDIUM", or "HIGH"

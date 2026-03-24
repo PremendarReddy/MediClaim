@@ -20,7 +20,9 @@ export default function Tickets({ role }) {
   const fetchTickets = async () => {
     try {
       setLoading(true);
-      const url = role === 'insurance' || role === 'admin' ? '/tickets' : '/tickets/my';
+      // Exclusively Patients view Sent Tickets, all other roles default to the global Inbox
+      const url = role === 'patient' ? '/tickets/my' : '/tickets';
+
       const response = await api.get(url);
       if (response.data.success) {
         setTickets(response.data.data);
@@ -69,7 +71,7 @@ export default function Tickets({ role }) {
     <DashboardLayout role={role}>
       <h1 className="text-2xl font-bold mb-6">Support Tickets</h1>
 
-      {/* Raise Ticket */}
+      {/* Raise Ticket (Restricted ONLY to Patients) */}
       {role === "patient" && (
         <div className="bg-white p-6 rounded-xl shadow-sm border mb-8">
           <h2 className="font-semibold mb-4">Raise Ticket</h2>
@@ -115,7 +117,9 @@ export default function Tickets({ role }) {
 
       {/* Ticket List */}
       <div className="bg-white p-6 rounded-xl shadow-sm border">
-        <h2 className="font-semibold mb-4">All Tickets</h2>
+        <h2 className="font-semibold mb-4 text-slate-800">
+          {role === 'patient' ? 'My Raised Tickets' : 'Tickets from Patients'}
+        </h2>
 
           {loading ? (
             <p className="text-sm text-gray-500">Loading tickets...</p>

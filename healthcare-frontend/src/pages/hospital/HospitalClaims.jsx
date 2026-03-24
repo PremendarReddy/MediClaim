@@ -22,15 +22,11 @@ export default function HospitalClaims() {
       setLoading(true);
       const res = await api.get('/hospitals/claims');
       if (res.data.success) {
-        // Augment deeply nested Claims with simulated AI Risk parameters (consistent with Insurer Views)
+        // Map native AI Risk Score explicitly avoiding legacy mock algorithms
         const augmented = res.data.data.map(c => {
-          let simulatedRisk = "LOW";
-          if (c.totalAmount > 500000) simulatedRisk = "HIGH";
-          else if (c.totalAmount > 100000) simulatedRisk = "MEDIUM";
-          
           return { 
              ...c, 
-             aiRiskScore: (c.aiRiskScore && c.aiRiskScore !== "PENDING") ? c.aiRiskScore : simulatedRisk 
+             aiRiskScore: (c.aiRiskScore && c.aiRiskScore !== "PENDING") ? c.aiRiskScore : "PENDING"
           };
         });
         setClaims(augmented);

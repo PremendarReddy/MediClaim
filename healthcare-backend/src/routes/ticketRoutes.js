@@ -12,6 +12,6 @@ router.route('/my')
     .get(protect, authorize('PATIENT', 'HOSPITAL'), getMyTickets);
 
 router.route('/:id/resolve')
-    .put(protect, authorize('INSURANCE', 'ADMIN'), resolveTicket);
+    .put(protect, authorize('INSURANCE', 'ADMIN', 'HOSPITAL'), resolveTicket);
 
 export default router;

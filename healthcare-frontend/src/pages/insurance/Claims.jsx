@@ -29,12 +29,13 @@ export default function InsuranceClaims() {
       setLoading(true);
       const res = await api.get('/hospitals/claims');
       if (res.data.success) {
-        // Augment with simulated AI risk score if missing
+        // Map native AI Risk Score (LOW, MEDIUM, HIGH) instead of fallback simulators
         const augmented = res.data.data.map(c => {
-          let simulatedRisk = "Low";
-          if (c.totalAmount > 500000) simulatedRisk = "High";
-          else if (c.totalAmount > 100000) simulatedRisk = "Medium";
-          return { ...c, risk: c.riskScore || simulatedRisk };
+          let authenticRisk = "Low";
+          if (c.aiRiskScore && c.aiRiskScore !== 'PENDING') {
+            authenticRisk = c.aiRiskScore.charAt(0).toUpperCase() + c.aiRiskScore.slice(1).toLowerCase();
+          }
+          return { ...c, risk: authenticRisk };
         });
         setClaims(augmented);
       }

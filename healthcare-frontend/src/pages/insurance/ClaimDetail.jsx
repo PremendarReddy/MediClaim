@@ -123,8 +123,10 @@ export default function InsuranceClaimDetail() {
     )
   }
 
-  // Simulated AI Risk Score if backend is missing
-  const simulatedRisk = claim.riskScore || (claim.totalAmount > 500000 ? "High" : claim.totalAmount > 100000 ? "Medium" : "Low");
+  // Native AI Risk Mapping directly targeting Mongoose arrays
+  const authenticRisk = (claim.aiRiskScore && claim.aiRiskScore !== "PENDING") 
+      ? claim.aiRiskScore.charAt(0).toUpperCase() + claim.aiRiskScore.slice(1).toLowerCase() 
+      : "Pending Analysis";
 
   // Simulated timeline since backend only provides createdAt and status right now.
   const timeline = [

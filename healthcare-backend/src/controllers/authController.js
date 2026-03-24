@@ -135,6 +135,15 @@ export const updateUserProfile = async (req, res) => {
                     
                     console.log("MAPPED EMERGENCY:", user.patientDetails.emergencyContact);
                 }
+            } else if (user.role === 'INSURANCE') {
+                if (!user.insuranceDetails) user.insuranceDetails = {};
+                if (req.body.insuranceDetails) {
+                    user.insuranceDetails = { 
+                        ...user.insuranceDetails, 
+                        ...req.body.insuranceDetails 
+                    };
+                    user.markModified('insuranceDetails');
+                }
             }
             
             user.markModified('patientDetails');
@@ -146,7 +155,8 @@ export const updateUserProfile = async (req, res) => {
                     name: user.name, 
                     email: user.email, 
                     role: user.role, 
-                    patientDetails: user.patientDetails || undefined 
+                    patientDetails: user.patientDetails || undefined,
+                    insuranceDetails: user.insuranceDetails || undefined
                 }
             });
         } else {
