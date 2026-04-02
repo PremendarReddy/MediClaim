@@ -63,7 +63,7 @@ export default function HospitalDashboard() {
         totalPatients: patientsRes.data.count || patientsRes.data.data?.length || 0,
         reportsUploaded: allClaims.reduce((acc, c) => acc + (c.documents?.length || 0), 0),
         pendingClaims: allClaims.filter(c => c.status === "Pending" || c.status === "Submitted").length,
-        alerts: 2 // Assuming static alerts logic or expand later
+        alerts: (patientsRes.data.data || []).filter(p => p.patientDetails?.criticalAlert === true).length
       });
 
       setClaims(allClaims);

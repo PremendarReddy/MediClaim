@@ -92,7 +92,9 @@ export default function AddPatient() {
     const formErrors = validateAddPatientForm(formData);
     if (Object.keys(formErrors).length > 0) {
       setErrors(formErrors);
-      setTouched({ name: true, email: true, phone: true });
+      const allTouched = Object.keys(formData).reduce((acc, key) => ({ ...acc, [key]: true }), {});
+      setTouched(allTouched);
+      toast.error("Please explicitly correct the highlighted fields before proceeding.");
       return;
     }
 

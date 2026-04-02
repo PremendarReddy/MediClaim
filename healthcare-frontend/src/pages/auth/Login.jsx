@@ -59,6 +59,7 @@ export default function Login() {
     if (Object.keys(formErrors).length > 0) {
       setErrors(formErrors);
       setTouched({ email: true, password: true });
+      toast.error("Please explicitly correct the highlighted fields before proceeding.");
       return;
     }
 

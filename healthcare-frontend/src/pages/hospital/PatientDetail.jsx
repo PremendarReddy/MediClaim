@@ -167,6 +167,18 @@ export default function PatientDetail() {
     }
   };
 
+  const handleCriticalAlertToggle = async (isCritical) => {
+    try {
+      const res = await api.put(`/hospitals/patients/${patient._id}`, { criticalAlert: isCritical });
+      if (res.data.success) {
+        setPatient(res.data.data);
+        toast.success(isCritical ? "Patient flagged as Critical Alert!" : "Critical Alert flag removed.");
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Failed to update alert status");
+    }
+  };
+
   const handleLinkInsurance = async (e) => {
     e.preventDefault();
     if (!insuranceForm.isCustomProvider && !insuranceForm.providerId) {
@@ -312,7 +324,7 @@ export default function PatientDetail() {
       </div>
 
       {/* Detailed Info */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8 border border-slate-200 rounded-2xl p-6 bg-slate-50">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-6 mb-8 border border-slate-200 rounded-2xl p-6 bg-slate-50">
         <div>
           <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">DOB</p>
           <p className="font-bold text-slate-800">{patient.patientDetails?.dateOfBirth ? new Date(patient.patientDetails.dateOfBirth).toLocaleDateString() : "N/A"}</p>
@@ -346,6 +358,20 @@ export default function PatientDetail() {
                  </div>
              );
           })()}
+        </div>
+        <div>
+          <p className="text-xs font-bold uppercase tracking-wider text-rose-500 mb-1 flex items-center gap-1">
+             🚨 Priority
+          </p>
+          <div className="flex items-center gap-2 mt-2">
+             <input 
+                 type="checkbox" 
+                 checked={patient.patientDetails?.criticalAlert || false}
+                 onChange={(e) => handleCriticalAlertToggle(e.target.checked)}
+                 className="w-4 h-4 text-rose-600 border-rose-300 rounded focus:ring-rose-500 cursor-pointer"
+             />
+             <span className="text-xs font-bold text-slate-700 leading-tight block">Critical Alert</span>
+          </div>
         </div>
       </div>
 

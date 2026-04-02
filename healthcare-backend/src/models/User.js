@@ -55,6 +55,10 @@ const userSchema = new mongoose.Schema(
             nextCheckupDate: {
                 type: Date
             },
+            criticalAlert: {
+                type: Boolean,
+                default: false
+            },
             // Link to the hospital that created this patient profile
             registeredByHospital: {
                 type: mongoose.Schema.Types.ObjectId,

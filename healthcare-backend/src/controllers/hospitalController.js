@@ -606,7 +606,7 @@ export const getHospitalSlots = async (req, res) => {
 // @access  Private/Hospital
 export const updatePatientDetails = async (req, res) => {
     try {
-        const { status, nextCheckupDate, insuranceDetails } = req.body;
+        const { status, nextCheckupDate, criticalAlert, insuranceDetails } = req.body;
 
         const patient = await User.findOne({ _id: req.params.id, role: 'PATIENT' });
         
@@ -625,6 +625,10 @@ export const updatePatientDetails = async (req, res) => {
         // Let it be cleared optionally if undefined, but usually handled from frontend
         if (nextCheckupDate !== undefined) {
              patient.patientDetails.nextCheckupDate = nextCheckupDate;
+        }
+
+        if (criticalAlert !== undefined) {
+             patient.patientDetails.criticalAlert = criticalAlert;
         }
 
         // Retrospective Insurance Linkage
