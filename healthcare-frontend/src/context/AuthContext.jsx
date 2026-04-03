@@ -35,6 +35,20 @@ export const AuthProvider = ({ children }) => {
         };
         
         loadUser();
+
+        // Multi-tab logout sync
+        const handleStorageChange = (e) => {
+            if (e.key === 'logout-event') {
+                setUser(null);
+                localStorage.removeItem('user');
+                delete api.defaults.headers.common['Authorization'];
+                if (window.location.pathname !== '/login' && window.location.pathname !== '/register') {
+                    window.location.href = '/login';
+                }
+            }
+        };
+        window.addEventListener('storage', handleStorageChange);
+        return () => window.removeEventListener('storage', handleStorageChange);
     }, []);
 
     const login = async (email, password) => {
@@ -64,7 +78,7 @@ export const AuthProvider = ({ children }) => {
         } catch (error) {
             return {
                 success: false,
-                error: error.response?.data?.message || 'Network error occurred'
+                error: error.response?.data?.message || (error.code === 'ERR_NETWORK' ? 'Unable to connect to the server (Network/CORS Error)' : 'An unexpected error occurred')
             };
         }
     };
@@ -93,7 +107,7 @@ export const AuthProvider = ({ children }) => {
         } catch (error) {
             return {
                 success: false,
-                error: error.response?.data?.message || 'Network error occurred'
+                error: error.response?.data?.message || (error.code === 'ERR_NETWORK' ? 'Unable to connect to the server (Network/CORS Error)' : 'An unexpected error occurred')
             };
         }
     };
@@ -122,7 +136,7 @@ export const AuthProvider = ({ children }) => {
         } catch (error) {
             return {
                 success: false,
-                error: error.response?.data?.message || 'Network error occurred'
+                error: error.response?.data?.message || (error.code === 'ERR_NETWORK' ? 'Unable to connect to the server (Network/CORS Error)' : 'An unexpected error occurred')
             };
         }
     };
@@ -130,7 +144,11 @@ export const AuthProvider = ({ children }) => {
     const logout = () => {
         setUser(null);
         localStorage.removeItem('user');
-        window.location.href = '/login';
+        delete api.defaults.headers.common['Authorization'];
+        localStorage.setItem('logout-event', Date.now().toString());
+        if (window.location.pathname !== '/login' && window.location.pathname !== '/register') {
+            window.location.href = '/login';
+        }
     };
 
     const updateUserLocal = (updatedFields) => {
