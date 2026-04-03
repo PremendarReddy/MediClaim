@@ -31,9 +31,15 @@ api.interceptors.response.use(
     },
     (error) => {
         if (error.response && error.response.status === 401) {
-            // Auto-logout if token is expired or invalid
+            // Dispatch a multi-tab logout event across the browser
+            localStorage.setItem('logout-event', Date.now().toString());
+            // Clear the local token
             localStorage.removeItem('user');
-            window.location.href = '/login';
+            
+            // Only redirect if we aren't already on login
+            if (window.location.pathname !== '/login' && window.location.pathname !== '/register') {
+                window.location.href = '/login';
+            }
         }
         return Promise.reject(error);
     }
