@@ -51,10 +51,7 @@ const corsOptions = {
     optionsSuccessStatus: 200 // For legacy browser compatibility
 };
 
-// 1. Preflight requests handler (MUST be before regular routes)
-app.options('*', cors(corsOptions));
-
-// 2. Main CORS middleware
+// Main CORS middleware (Handles preflight natively)
 app.use(cors(corsOptions));
 // ----------------------------
 app.use(express.json());
