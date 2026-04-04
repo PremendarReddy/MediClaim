@@ -16,22 +16,47 @@ connectDB();
 
 const app = express();
 
-// Middleware
+// --- CORS CONFIGURATION ---
+const FALLBACK_OPEN_CORS = process.env.OPEN_CORS === 'true';
+
 const allowedOrigins = [
     'http://localhost:5173',
+    'https://medi-claim-kappa.vercel.app',
     process.env.FRONTEND_URL
 ].filter(Boolean);
 
-app.use(cors({
+const corsOptions = {
     origin: function (origin, callback) {
-        if (!origin || allowedOrigins.includes(origin)) {
-            callback(null, true);
+        // Fallback open configuration for debugging issues
+        if (FALLBACK_OPEN_CORS) {
+            console.log(`[CORS DEBUG] Allowing origin (OPEN_CORS flag enabled): ${origin}`);
+            return callback(null, true);
+        }
+
+        // Allow requests with no origin (like mobile apps, curl, or Postman)
+        if (!origin) {
+            return callback(null, true);
+        }
+
+        if (allowedOrigins.includes(origin)) {
+            return callback(null, true);
         } else {
-            callback(new Error('Not allowed by CORS'));
+            console.warn(`[CORS WARN] Blocked by CORS policy: Origin ${origin} is not permitted.`);
+            return callback(new Error(`CORS Error: Origin ${origin} is not permitted.`));
         }
     },
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
     credentials: true,
-}));
+    optionsSuccessStatus: 200 // For legacy browser compatibility
+};
+
+// 1. Preflight requests handler (MUST be before regular routes)
+app.options('*', cors(corsOptions));
+
+// 2. Main CORS middleware
+app.use(cors(corsOptions));
+// ----------------------------
 app.use(express.json());
 
 // Serve static files from the uploads directory
