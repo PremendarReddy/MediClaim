@@ -4,14 +4,14 @@ import nodemailer from 'nodemailer';
 // For production, configure these in .env
 const createTransporter = () => {
     let host = process.env.SMTP_HOST || 'smtp.gmail.com';
-    let port = process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : 465;
+    let port = process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : 587;
 
     // If they used 'gmail' service shorthand, map it to explicit host to prevent NodeMailer
     // from overriding connection settings (which drops the IPv4 family enforcement)
     if (process.env.SMTP_SERVICE && process.env.SMTP_SERVICE.toLowerCase() === 'gmail') {
         host = 'smtp.gmail.com';
-        // 465 is the implicit SSL port for Gmail which works safely on Render
-        port = process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : 465;
+        // 587 (STARTTLS) is less prone to being blackholed than 465 on cloud IPs
+        port = process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : 587;
     }
 
     return nodemailer.createTransport({
