@@ -19,15 +19,18 @@ export default function PatientReports() {
   const [aiInsight, setAiInsight] = useState(null);
   const navigate = useNavigate();
 
-  const handleDownload = async (fileUrl, fileName) => {
-    if (!fileUrl) {
+  const handleDownload = async (rawFileUrl, fileName) => {
+    if (!rawFileUrl) {
        toast.error("No valid file URL available.");
        return;
     }
-    if (fileUrl.startsWith('mock-storage://')) {
-       toast.info(`Simulated download: ${fileUrl.replace('mock-storage://', '')}`);
+    if (rawFileUrl.startsWith('mock-storage://')) {
+       toast.info(`Simulated download: ${rawFileUrl.replace('mock-storage://', '')}`);
        return;
     }
+    
+    // Force HTTPS to prevent mixed-content blocks from old records
+    const fileUrl = rawFileUrl.replace(/^http:\/\//i, 'https://');
     try {
         toast.info("Initiating secure download...");
         // If fileUrl is fully qualified or relative, axios can handle it.
@@ -337,7 +340,8 @@ export default function PatientReports() {
                        if (selectedReport.fileUrl && selectedReport.fileUrl.startsWith('mock-storage://')) {
                          toast.info(`Simulated view: ${selectedReport.fileUrl.replace('mock-storage://', '')}`);
                        } else if (selectedReport.fileUrl) {
-                         window.open(selectedReport.fileUrl, '_blank', 'noreferrer');
+                         const secureUrl = selectedReport.fileUrl.replace(/^http:\/\//i, 'https://');
+                         window.open(secureUrl, '_blank', 'noreferrer');
                        } else {
                          toast.error('No valid file URL found.');
                        }
@@ -353,10 +357,7 @@ export default function PatientReports() {
                     <span>📥</span> Download
                   </button>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <button className="w-full bg-white/10 text-white font-bold py-3.5 rounded-xl hover:bg-white/20 border border-white/10 transition flex items-center justify-center gap-2">
-                    <span>📤</span> Share
-                  </button>
+                <div className="pt-2">
                   <button
                     onClick={() => toast.success("Report attached to active claim sequence.")}
                     className="w-full bg-emerald-500/20 text-emerald-400 font-bold py-3.5 rounded-xl hover:bg-emerald-500/30 border border-emerald-500/30 transition flex items-center justify-center gap-2"

@@ -96,9 +96,9 @@ router.post('/agent/medical-insights', async (req, res) => {
 
         const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-        const prompt = `You are an expert Doctor AI. Read the following medical report text and extract the required information in a strictly structured format.
+        const prompt = `You are an expert Document Analysis AI for a health vault. Read the following document text and extract the required information in a strictly structured format. If the document is medical, provide medical insights. If it is administrative or general (like an ID proof, bill, receipt, or policy card), provide a general summary of what the document is and set the riskFactor to 'LOW'. Ensure all required fields are filled out sensibly regardless of the document type.
         
-Report Text:
+Document Text:
 """
 ${reportText}
 """`;
@@ -114,16 +114,16 @@ ${reportText}
                     properties: {
                         diagnosis: {
                             type: Type.STRING,
-                            description: "The primary medical diagnosis or body system affected, e.g., 'Cardiology' or 'Endocrinology / Diabetes'. Limit to 3 words."
+                            description: "The primary medical diagnosis, body system affected, OR if non-medical, the document category (e.g., 'Administrative', 'Billing', 'Identity Proof'). Limit to 3 words."
                         },
                         riskFactor: {
                             type: Type.STRING,
-                            description: "The risk level of the patient based on the report.",
+                            description: "The risk level based on the document. If the document is non-medical or administrative, always select 'LOW'.",
                             enum: ["LOW", "MEDIUM", "HIGH"]
                         },
                         aiSummary: {
                             type: Type.STRING,
-                            description: "A 2-3 sentence summary explaining the key findings and why the risk factor was chosen."
+                            description: "A 2-3 sentence summary explaining the key findings or what the document represents."
                         },
                         extractedMetrics: {
                             type: Type.OBJECT,
@@ -131,7 +131,7 @@ ${reportText}
                                 keywordsFound: {
                                     type: Type.ARRAY,
                                     items: { type: Type.STRING },
-                                    description: "A list of 3-5 critical medical keywords or indicators found in the text."
+                                    description: "A list of 3-5 critical medical keywords, indicators, or key data points (like dates/amounts) found in the text."
                                 }
                             }
                         }
