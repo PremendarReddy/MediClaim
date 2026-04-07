@@ -1,4 +1,14 @@
 import nodemailer from 'nodemailer';
+import dns from 'dns';
+
+// Node 18+ defaults to 'verbatim' DNS resolution, heavily favoring IPv6.
+// Render advertises IPv6 but blackholes outbound IPv6 packets (ENETUNREACH).
+// We globally force Node.js to resolve IPv4 addresses first.
+try {
+    dns.setDefaultResultOrder('ipv4first');
+} catch (e) {
+    console.warn("Could not set DNS result order:", e.message);
+}
 
 // Create a reusable transporter using SMTP transporter
 // For production, configure these in .env
