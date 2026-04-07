@@ -5,7 +5,7 @@ import { useClaim } from "../../context/ClaimContext";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "react-toastify";
 import api from "../../api/axios";
-import { User, Mail, Phone, Lock, Bell, Moon, Shield, LogOut, CheckCircle, Settings as SettingsIcon, X } from "lucide-react";
+import { User, Mail, Phone, Lock, Bell, Moon, Shield, LogOut, CheckCircle, Settings as SettingsIcon, X, Eye, EyeOff } from "lucide-react";
 
 export default function Settings() {
   const { user, logout, login, updateUserLocal } = useAuth(); // login to reset context if needed
@@ -24,6 +24,9 @@ export default function Settings() {
     currentPassword: "",
     newPassword: "",
   });
+
+  const [showCurrentPass, setShowCurrentPass] = useState(false);
+  const [showNewPass, setShowNewPass] = useState(false);
 
   const [preferences, setPreferences] = useState({
     emailNotif: true,
@@ -205,21 +208,39 @@ export default function Settings() {
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     <div>
                       <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Current Password</label>
-                      <input
-                          type="password"
-                          value={passData.currentPassword}
-                          onChange={(e) => setPassData({...passData, currentPassword: e.target.value})}
-                          className="block w-full px-3 py-3 border border-slate-200 dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-700/50 dark:text-white focus:outline-none focus:ring-2 focus:ring-rose-500/50 focus:border-rose-500 transition-all"
-                      />
+                      <div className="relative">
+                        <input
+                            type={showCurrentPass ? "text" : "password"}
+                            value={passData.currentPassword}
+                            onChange={(e) => setPassData({...passData, currentPassword: e.target.value})}
+                            className="block w-full px-3 pr-10 py-3 border border-slate-200 dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-700/50 dark:text-white focus:outline-none focus:ring-2 focus:ring-rose-500/50 focus:border-rose-500 transition-all"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowCurrentPass(!showCurrentPass)}
+                          className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 transition-colors"
+                        >
+                          {showCurrentPass ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                        </button>
+                      </div>
                     </div>
                     <div>
                       <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">New Password</label>
-                      <input
-                          type="password"
-                          value={passData.newPassword}
-                          onChange={(e) => setPassData({...passData, newPassword: e.target.value})}
-                          className="block w-full px-3 py-3 border border-slate-200 dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-700/50 dark:text-white focus:outline-none focus:ring-2 focus:ring-rose-500/50 focus:border-rose-500 transition-all"
-                      />
+                      <div className="relative">
+                        <input
+                            type={showNewPass ? "text" : "password"}
+                            value={passData.newPassword}
+                            onChange={(e) => setPassData({...passData, newPassword: e.target.value})}
+                            className="block w-full px-3 pr-10 py-3 border border-slate-200 dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-700/50 dark:text-white focus:outline-none focus:ring-2 focus:ring-rose-500/50 focus:border-rose-500 transition-all"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowNewPass(!showNewPass)}
+                          className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 transition-colors"
+                        >
+                          {showNewPass ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                        </button>
+                      </div>
                     </div>
                  </div>
                  <div className="flex justify-end pt-2">
