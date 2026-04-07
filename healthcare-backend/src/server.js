@@ -16,6 +16,9 @@ connectDB();
 
 const app = express();
 
+// Trust the reverse proxy (Render/Heroku/Vercel) so req.protocol properly returns 'https'
+app.set('trust proxy', 1);
+
 // --- CORS CONFIGURATION ---
 const FALLBACK_OPEN_CORS = process.env.OPEN_CORS === 'true';
 
