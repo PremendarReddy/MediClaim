@@ -3,22 +3,21 @@ import nodemailer from 'nodemailer';
 // Create a reusable transporter using SMTP transporter
 // For production, configure these in .env
 const createTransporter = () => {
-    // If SMTP_SERVICE is set (e.g., 'gmail'), it overrides manual host/port config
-    if (process.env.SMTP_SERVICE) {
-        return nodemailer.createTransport({
-            service: process.env.SMTP_SERVICE,
-            family: 4, // Force IPv4 explicitly on well-known services too
-            auth: {
-                user: process.env.SMTP_USER,
-                pass: process.env.SMTP_PASS,
-            },
-        });
+    let host = process.env.SMTP_HOST || 'smtp.gmail.com';
+    let port = process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : 465;
+
+    // If they used 'gmail' service shorthand, map it to explicit host to prevent NodeMailer
+    // from overriding connection settings (which drops the IPv4 family enforcement)
+    if (process.env.SMTP_SERVICE && process.env.SMTP_SERVICE.toLowerCase() === 'gmail') {
+        host = 'smtp.gmail.com';
+        // 465 is the implicit SSL port for Gmail which works safely on Render
+        port = process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : 465;
     }
 
     return nodemailer.createTransport({
-        host: process.env.SMTP_HOST || 'smtp.gmail.com', // fallback to gmail for dev
-        port: process.env.SMTP_PORT || 465, // 465 (SSL) is generally more reliable than 587 on cloud hosts
-        secure: process.env.SMTP_SECURE !== 'false', // Default to true unless explicitly false
+        host: host, 
+        port: port, 
+        secure: port === 465, // Use Implicit SSL for 465, STARTTLS for 587
         family: 4, // Enforce IPv4 because Render does not have outbound IPv6 routed
         auth: {
             user: process.env.SMTP_USER,
