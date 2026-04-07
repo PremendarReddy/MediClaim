@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { validateLoginForm } from "../../utils/formValidation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Activity, ShieldCheck, User, Shield, X, ArrowLeft } from "lucide-react";
+import { Activity, ShieldCheck, User, Shield, X, ArrowLeft, Eye, EyeOff } from "lucide-react";
 import { toast } from "react-toastify";
 import api from "../../api/axios";
 
@@ -23,6 +23,7 @@ export default function Login() {
   const [show2FA, setShow2FA] = useState(false);
   const [tempToken, setTempToken] = useState("");
   const [otpInput, setOtpInput] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   const [viewState, setViewState] = useState("login");
   const [resetEmail, setResetEmail] = useState("");
@@ -218,14 +219,21 @@ export default function Login() {
                         <ShieldCheck className="h-5 w-5 text-slate-400" />
                       </div>
                       <input
-                        type="password"
+                        type={showPassword ? "text" : "password"}
                         name="password"
                         value={formData.password}
                         onChange={handleChange}
                         onBlur={handleBlur}
                         placeholder="••••••••"
-                        className={`block w-full pl-10 pr-3 py-3 border rounded-xl leading-5 bg-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-all duration-200 ${touched.password && errors.password ? "border-red-300 focus:ring-red-500 focus:border-red-500" : "border-slate-200"}`}
+                        className={`block w-full pl-10 pr-10 py-3 border rounded-xl leading-5 bg-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-all duration-200 ${touched.password && errors.password ? "border-red-300 focus:ring-red-500 focus:border-red-500" : "border-slate-200"}`}
                       />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 transition-colors"
+                      >
+                        {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                      </button>
                     </div>
                     {touched.password && errors.password && (
                       <motion.p initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="text-red-500 text-xs mt-1.5 font-medium">{errors.password}</motion.p>

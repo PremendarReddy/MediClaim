@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { validateRegisterForm, getPasswordStrength } from "../../utils/formValidation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Building2, UserCircle, ShieldCheck, Mail, Key } from "lucide-react";
+import { Building2, UserCircle, ShieldCheck, Mail, Key, Eye, EyeOff } from "lucide-react";
 import { toast } from "react-toastify";
 
 export default function Register() {
@@ -14,6 +14,7 @@ export default function Register() {
   const [step, setStep] = useState(1);
   const [otp, setOtp] = useState("");
   const [otpEmail, setOtpEmail] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -250,14 +251,21 @@ export default function Register() {
                     <Key className="h-5 w-5 text-slate-400" />
                   </div>
                   <input
-                    type="password"
+                    type={showPassword ? "text" : "password"}
                     name="password"
                     value={formData.password}
                     onChange={handleChange}
                     onBlur={handleBlur}
                     placeholder="••••••••"
-                    className={`block w-full pl-10 pr-3 py-2.5 border rounded-xl leading-5 bg-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all ${touched.password && errors.password ? "border-red-300 focus:border-red-500 focus:ring-red-500" : "border-slate-200"}`}
+                    className={`block w-full pl-10 pr-10 py-2.5 border rounded-xl leading-5 bg-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all ${touched.password && errors.password ? "border-red-300 focus:border-red-500 focus:ring-red-500" : "border-slate-200"}`}
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 transition-colors"
+                  >
+                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                  </button>
                 </div>
                 {formData.password && (
                   <div className="mt-2.5">
