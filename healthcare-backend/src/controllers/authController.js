@@ -17,8 +17,22 @@ export const registerUser = async (req, res) => {
     try {
         const { name, email, password, role, hospitalDetails, insuranceDetails } = req.body;
 
-        const userExists = await User.findOne({ email });
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        const otpExpire = Date.now() + 15 * 60 * 1000;
+
+        let userExists = await User.findOne({ email });
         if (userExists) {
+            if (userExists.isVerified === false) {
+                userExists.registrationOTP = otp;
+                userExists.registrationOTPExpire = otpExpire;
+                userExists.password = password; 
+                if (role === 'HOSPITAL') userExists.hospitalDetails = hospitalDetails;
+                if (role === 'INSURANCE') userExists.insuranceDetails = insuranceDetails;
+                await userExists.save();
+
+                await sendOTPEmail(email, otp);
+                return res.status(200).json({ success: true, requiresOTP: true, message: 'OTP sent to email', email: userExists.email });
+            }
             return res.status(400).json({ success: false, message: 'User already exists' });
         }
 
@@ -33,22 +47,59 @@ export const registerUser = async (req, res) => {
             role,
             hospitalDetails: role === 'HOSPITAL' ? hospitalDetails : undefined,
             insuranceDetails: role === 'INSURANCE' ? insuranceDetails : undefined,
+            isVerified: false,
+            registrationOTP: otp,
+            registrationOTPExpire: otpExpire
         });
 
         if (user) {
+            await sendOTPEmail(email, otp);
             res.status(201).json({
                 success: true,
-                data: {
-                    _id: user._id,
-                    name: user.name,
-                    email: user.email,
-                    role: user.role,
-                    token: generateToken(user._id),
-                }
+                requiresOTP: true,
+                message: 'OTP sent to email',
+                email: user.email
             });
         } else {
             res.status(400).json({ success: false, message: 'Invalid user data' });
         }
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// @desc    Verify Registration OTP
+// @route   POST /api/auth/register-verify
+// @access  Public
+export const verifyRegistration = async (req, res) => {
+    try {
+        const { email, otp } = req.body;
+
+        const user = await User.findOne({
+            email,
+            registrationOTP: otp,
+            registrationOTPExpire: { $gt: Date.now() },
+        });
+
+        if (!user) {
+            return res.status(400).json({ success: false, message: 'Invalid or expired OTP' });
+        }
+
+        user.isVerified = true;
+        user.registrationOTP = undefined;
+        user.registrationOTPExpire = undefined;
+        await user.save();
+
+        res.json({
+            success: true,
+            data: {
+                _id: user._id,
+                name: user.name,
+                email: user.email,
+                role: user.role,
+                token: generateToken(user._id),
+            }
+        });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
@@ -64,6 +115,10 @@ export const authUser = async (req, res) => {
         const user = await User.findOne({ email });
 
         if (user && (await user.matchPassword(password))) {
+            if (user.isVerified === false && (user.role === 'HOSPITAL' || user.role === 'INSURANCE')) {
+                return res.status(401).json({ success: false, message: 'Please verify your email address to log in. Register again to receive a new OTP.' });
+            }
+
             if (user.twoFactorEnabled) {
                 // Return a temporary token to proceed to 2FA verification
                 const tempToken = jwt.sign({ id: user._id, is2FaPending: true }, process.env.JWT_SECRET, { expiresIn: '5m' });
