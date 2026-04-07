@@ -18,6 +18,7 @@ const createTransporter = () => {
         host: process.env.SMTP_HOST || 'smtp.gmail.com', // fallback to gmail for dev
         port: process.env.SMTP_PORT || 465, // 465 (SSL) is generally more reliable than 587 on cloud hosts
         secure: process.env.SMTP_SECURE !== 'false', // Default to true unless explicitly false
+        family: 4, // Enforce IPv4 because Render does not have outbound IPv6 routed
         auth: {
             user: process.env.SMTP_USER,
             pass: process.env.SMTP_PASS,
