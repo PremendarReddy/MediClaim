@@ -106,7 +106,10 @@ const userSchema = new mongoose.Schema(
         twoFactorEnabled: { type: Boolean, default: false },
         twoFactorSecret: { type: String },
         resetPasswordOTP: { type: String },
-        resetPasswordExpire: { type: Date }
+        resetPasswordExpire: { type: Date },
+        isVerified: { type: Boolean, default: true },
+        registrationOTP: { type: String },
+        registrationOTPExpire: { type: Date }
     },
     {
         timestamps: true,

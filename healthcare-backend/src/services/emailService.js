@@ -3,14 +3,29 @@ import nodemailer from 'nodemailer';
 // Create a reusable transporter using SMTP transporter
 // For production, configure these in .env
 const createTransporter = () => {
+    // If SMTP_SERVICE is set (e.g., 'gmail'), it overrides manual host/port config
+    if (process.env.SMTP_SERVICE) {
+        return nodemailer.createTransport({
+            service: process.env.SMTP_SERVICE,
+            auth: {
+                user: process.env.SMTP_USER,
+                pass: process.env.SMTP_PASS,
+            },
+        });
+    }
+
     return nodemailer.createTransport({
         host: process.env.SMTP_HOST || 'smtp.gmail.com', // fallback to gmail for dev
-        port: process.env.SMTP_PORT || 587,
-        secure: process.env.SMTP_SECURE === 'true', // true for 465, false for other ports
+        port: process.env.SMTP_PORT || 465, // 465 (SSL) is generally more reliable than 587 on cloud hosts
+        secure: process.env.SMTP_SECURE !== 'false', // Default to true unless explicitly false
         auth: {
             user: process.env.SMTP_USER,
             pass: process.env.SMTP_PASS,
         },
+        tls: {
+            // Do not fail on invalid certs on free cloud tiers
+            rejectUnauthorized: false
+        }
     });
 };
 

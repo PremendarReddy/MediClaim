@@ -115,6 +115,11 @@ export const AuthProvider = ({ children }) => {
     const register = async (userData) => {
         try {
             const response = await api.post('/auth/register', userData);
+            
+            if (response.data.requiresOTP) {
+                return { success: true, requiresOTP: true, email: response.data.email };
+            }
+
             if (response.data.success) {
                 let newUserData = response.data.data;
                 api.defaults.headers.common['Authorization'] = `Bearer ${newUserData.token}`;
@@ -133,6 +138,35 @@ export const AuthProvider = ({ children }) => {
                 return { success: true, role: newUserData.role };
             }
             return { success: false, error: 'Registration failed' };
+        } catch (error) {
+            return {
+                success: false,
+                error: error.response?.data?.message || (error.code === 'ERR_NETWORK' ? 'Unable to connect to the server (Network/CORS Error)' : 'An unexpected error occurred')
+            };
+        }
+    };
+
+    const verifyRegistrationOTP = async (email, otp) => {
+        try {
+            const response = await api.post('/auth/register-verify', { email, otp });
+            if (response.data.success) {
+                let userData = response.data.data;
+                api.defaults.headers.common['Authorization'] = `Bearer ${userData.token}`;
+                
+                try {
+                    const profileRes = await api.get('/auth/profile');
+                    if (profileRes.data.success) {
+                        userData = { ...profileRes.data.data, token: userData.token };
+                    }
+                } catch (e) {
+                    console.error("Profile fetch failed post-registration", e);
+                }
+
+                setUser(userData);
+                localStorage.setItem('user', JSON.stringify(userData));
+                return { success: true, role: userData.role };
+            }
+            return { success: false, error: 'Invalid OTP' };
         } catch (error) {
             return {
                 success: false,
@@ -160,7 +194,7 @@ export const AuthProvider = ({ children }) => {
     };
 
     return (
-        <AuthContext.Provider value={{ user, loading, login, verify2FALogin, register, logout, updateUserLocal }}>
+        <AuthContext.Provider value={{ user, loading, login, verify2FALogin, register, verifyRegistrationOTP, logout, updateUserLocal }}>
             {!loading && children}
         </AuthContext.Provider>
     );

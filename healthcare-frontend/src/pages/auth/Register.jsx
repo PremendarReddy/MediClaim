@@ -8,9 +8,12 @@ import { toast } from "react-toastify";
 
 export default function Register() {
   const navigate = useNavigate();
-  const { register } = useAuth(); // Using real API context
+  const { register, verifyRegistrationOTP } = useAuth(); // Using real API context
 
   const [role, setRole] = useState("hospital");
+  const [step, setStep] = useState(1);
+  const [otp, setOtp] = useState("");
+  const [otpEmail, setOtpEmail] = useState("");
 
   const [formData, setFormData] = useState({
     name: "",
@@ -100,14 +103,43 @@ export default function Register() {
     setLoading(false);
 
     if (result.success) {
-      toast.success("Account created successfully!");
-      if (role === "hospital") {
+      if (result.requiresOTP) {
+        setOtpEmail(result.email || formData.email);
+        setStep(2);
+        toast.info("Registration initiated. Please check your email for the verification code.");
+      } else {
+        toast.success("Account created successfully!");
+        if (role === "hospital") {
+          navigate("/hospital/dashboard");
+        } else {
+          navigate("/insurance/dashboard");
+        }
+      }
+    } else {
+      toast.error(result.error || "Registration failed. Please check details.");
+    }
+  };
+
+  const handleVerifyOTP = async (e) => {
+    e.preventDefault();
+    if (otp.length !== 6) {
+      toast.error("Please enter a valid 6-digit OTP");
+      return;
+    }
+
+    setLoading(true);
+    const result = await verifyRegistrationOTP(otpEmail, otp);
+    setLoading(false);
+
+    if (result.success) {
+      toast.success("Account verified and created successfully!");
+      if (result.role === "HOSPITAL") {
         navigate("/hospital/dashboard");
       } else {
         navigate("/insurance/dashboard");
       }
     } else {
-      toast.error(result.error || "Registration failed. Please check details.");
+      toast.error(result.error || "Invalid OTP");
     }
   };
 
@@ -126,6 +158,8 @@ export default function Register() {
         className="relative z-10 w-full max-w-lg mx-auto p-4 sm:p-6"
       >
         <div className="bg-white/80 backdrop-blur-xl border border-white/50 p-8 rounded-3xl shadow-2xl shadow-slate-200/50">
+          {step === 1 ? (
+             <>
           <div className="text-center mb-8">
             <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight mb-2">
               Join MediClaim
@@ -385,11 +419,64 @@ export default function Register() {
               <button
                 onClick={() => navigate('/login')}
                 className="font-bold text-slate-900 hover:text-blue-600 transition-colors"
+                type="button"
               >
                 Sign in here
               </button>
             </p>
           </div>
+          </>
+          ) : (
+            <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}>
+                <div className="text-center mb-8">
+                  <div className="mx-auto bg-blue-100 text-blue-600 w-16 h-16 flex items-center justify-center rounded-full mb-4">
+                    <ShieldCheck className="h-8 w-8" />
+                  </div>
+                  <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight mb-2">
+                    Verify Email
+                  </h1>
+                  <p className="text-slate-500 text-sm">
+                    We sent a 6-digit code to <span className="font-semibold text-slate-800">{otpEmail}</span>
+                  </p>
+                </div>
+
+                <form onSubmit={handleVerifyOTP} className="space-y-5">
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-1.5 text-center">Enter Verification Code</label>
+                    <input
+                      type="text"
+                      maxLength="6"
+                      value={otp}
+                      onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
+                      className="block w-full py-4 text-center text-3xl tracking-[0.5em] font-mono border rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                      placeholder="------"
+                    />
+                  </div>
+
+                  <motion.button
+                    whileHover={{ scale: 1.01 }}
+                    whileTap={{ scale: 0.99 }}
+                    disabled={loading || otp.length !== 6}
+                    className="w-full flex justify-center py-3.5 px-4 rounded-xl shadow-lg shadow-blue-500/30 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-600 transition-colors disabled:opacity-70 disabled:cursor-not-allowed mt-6"
+                  >
+                    {loading ? (
+                      <div className="flex items-center space-x-2">
+                        <div className="w-4 h-4 rounded-full border-2 border-white/20 border-t-white animate-spin"></div>
+                        <span>Verifying...</span>
+                      </div>
+                    ) : (
+                      "Verify & Create Account"
+                    )}
+                  </motion.button>
+                </form>
+                
+                <div className="mt-8 text-center">
+                  <button type="button" onClick={() => setStep(1)} className="text-sm font-semibold text-slate-500 hover:text-blue-600 transition-colors">
+                    Back to Registration
+                  </button>
+                </div>
+              </motion.div>
+          )}
         </div>
       </motion.div>
     </div>
