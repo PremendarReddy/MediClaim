@@ -23,7 +23,13 @@ export const sendPatientOTP = async (req, res) => {
 
         const userExists = await User.findOne({ email });
         if (userExists) {
-            return res.status(400).json({ success: false, message: 'Patient with this email already exists' });
+            if (userExists.role !== 'PATIENT') {
+                return res.status(400).json({ success: false, message: 'A non-patient user with this email already exists.' });
+            }
+            const hospitals = userExists.patientDetails?.registeredByHospitals || [];
+            if (hospitals.some(id => id.toString() === req.user._id.toString())) {
+                 return res.status(400).json({ success: false, message: 'Patient is already registered with your hospital.' });
+            }
         }
 
         // Generate 6 digit OTP
