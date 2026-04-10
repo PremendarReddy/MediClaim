@@ -5,22 +5,22 @@ import Ticket from '../models/Ticket.js';
 // @access  Private (Patient/Hospital)
 export const createTicket = async (req, res) => {
     try {
-        const { subject, message, raisedByRole, targetRole } = req.body;
+        const { subject, message, raisedByRole, targetRole, targetId: explicitTargetId } = req.body;
         
         if (!['HOSPITAL', 'PATIENT'].includes(raisedByRole)) {
             return res.status(400).json({ success: false, message: 'Invalid role for raising a ticket.' });
         }
 
         // Dynamically resolve targetId if patient
-        let targetId = null;
-        if (raisedByRole === 'PATIENT' && req.user.patientDetails) {
-             if (targetRole === 'HOSPITAL') {
-                  targetId = req.user.patientDetails.registeredByHospital;
+        let targetId = explicitTargetId || null;
+        if (raisedByRole === 'PATIENT' && !targetId && req.user.patientDetails) {
+             if (targetRole === 'HOSPITAL' && req.user.patientDetails.registeredByHospitals?.length > 0) {
+                  targetId = req.user.patientDetails.registeredByHospitals[0];
              } else if (targetRole === 'INSURANCE' && req.user.patientDetails.insuranceDetails) {
                   targetId = req.user.patientDetails.insuranceDetails.providerId || null;
              }
         } else if (raisedByRole === 'HOSPITAL') {
-             targetId = null; // usually goes to Insurance/Admin
+             targetId = explicitTargetId || null; // usually goes to Insurance/Admin
         }
 
         const ticket = await Ticket.create({

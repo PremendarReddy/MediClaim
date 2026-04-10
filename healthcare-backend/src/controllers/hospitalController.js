@@ -63,11 +63,8 @@ export const registerPatient = async (req, res) => {
         }
 
         const userExists = await User.findOne({ email });
-        if (userExists) {
-            return res.status(400).json({ success: false, message: 'Patient with this email already exists' });
-        }
 
-        // Verify OTP
+        // Verify OTP early
         const storedOtpData = otpStore.get(email);
 
         if (!storedOtpData) {
@@ -81,7 +78,7 @@ export const registerPatient = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Invalid OTP provided.' });
         }
 
-        // OTP verifed successfully. Clear it.
+        // OTP verified successfully. Clear it.
         otpStore.delete(email);
 
         // --- AI DOCUMENT ANALYSIS ---
@@ -112,6 +109,62 @@ export const registerPatient = async (req, res) => {
             }
         }
 
+        if (userExists) {
+            if (userExists.role !== 'PATIENT') {
+                return res.status(400).json({ success: false, message: 'A non-patient user with this email already exists.' });
+            }
+
+            // Ensure field is an array (migration safety)
+            const hospitals = userExists.patientDetails.registeredByHospitals || [];
+            
+            if (hospitals.some(id => id.toString() === req.user._id.toString())) {
+                return res.status(400).json({ success: false, message: 'Patient is already registered with your hospital.' });
+            }
+
+            // Add the new hospital
+            userExists.patientDetails.registeredByHospitals = [...hospitals, req.user._id];
+
+            // Retain old insurance coverage and limits if the provider and policy match
+            let retainedInsuranceDetails = finalInsuranceDetails;
+            if (userExists.patientDetails.insuranceDetails && finalInsuranceDetails) {
+                const oldIns = userExists.patientDetails.insuranceDetails;
+                const newIns = finalInsuranceDetails;
+
+                // Check provider match (either standard providerId or customProviderName) AND policyNumber
+                const isSameProvider = (oldIns.providerId && newIns.providerId && oldIns.providerId.toString() === newIns.providerId.toString()) 
+                    || (oldIns.isCustomProvider && newIns.isCustomProvider && oldIns.customProviderName === newIns.customProviderName);
+                const isSamePolicy = (oldIns.policyNumber && newIns.policyNumber && oldIns.policyNumber === newIns.policyNumber);
+
+                if (isSameProvider && isSamePolicy) {
+                    retainedInsuranceDetails = {
+                        ...newIns,
+                        coverageAmount: oldIns.coverageAmount,
+                        balanceAmount: oldIns.balanceAmount,
+                        validUpto: oldIns.validUpto || newIns.validUpto,
+                        coverageBreakdown: oldIns.coverageBreakdown || newIns.coverageBreakdown,
+                        insuranceDocuments: [...(oldIns.insuranceDocuments || []), ...(newIns.insuranceDocuments || [])]
+                    };
+                }
+            }
+
+            if (retainedInsuranceDetails) {
+                 userExists.patientDetails.insuranceDetails = retainedInsuranceDetails;
+            }
+            
+            userExists.markModified('patientDetails');
+            await userExists.save();
+
+            return res.status(200).json({
+                success: true,
+                message: 'Patient linked to your hospital successfully.',
+                data: {
+                    _id: userExists._id,
+                    name: userExists.name,
+                    email: userExists.email,
+                }
+            });
+        }
+
         // Auto-generate a password for the patient to login with later
         const generatedPassword = generatePassword();
 
@@ -123,7 +176,7 @@ export const registerPatient = async (req, res) => {
             patientDetails: {
                 ...patientDetails,
                 insuranceDetails: finalInsuranceDetails,
-                registeredByHospital: req.user._id
+                registeredByHospitals: [req.user._id]
             }
         });
 
@@ -152,7 +205,7 @@ export const getHospitalPatients = async (req, res) => {
     try {
         const patients = await User.find({
             role: 'PATIENT',
-            'patientDetails.registeredByHospital': req.user._id
+            'patientDetails.registeredByHospitals': req.user._id
         }).select('-password');
 
         res.json({ success: true, count: patients.length, data: patients });
@@ -190,7 +243,7 @@ export const createClaim = async (req, res) => {
         const patient = await User.findOne({
             _id: patientId,
             role: 'PATIENT',
-            'patientDetails.registeredByHospital': req.user._id
+            'patientDetails.registeredByHospitals': req.user._id
         });
 
         if (!patient) {
@@ -357,7 +410,7 @@ export const sendClaimInitiationOTP = async (req, res) => {
         const patient = await User.findOne({
             _id: patientId,
             role: 'PATIENT',
-            'patientDetails.registeredByHospital': req.user._id
+            'patientDetails.registeredByHospitals': req.user._id
         });
 
         if (!patient) {
@@ -615,8 +668,8 @@ export const updatePatientDetails = async (req, res) => {
         }
 
         // We could enforce that the hospital updating is the hospital who registered them
-        if (patient.patientDetails.registeredByHospital && 
-            patient.patientDetails.registeredByHospital.toString() !== req.user._id.toString()) {
+        if (patient.patientDetails.registeredByHospitals && 
+            !patient.patientDetails.registeredByHospitals.some(id => id.toString() === req.user._id.toString())) {
             return res.status(401).json({ success: false, message: 'Not authorized to update this patient' });
         }
 
@@ -650,7 +703,7 @@ export const updatePatientDetails = async (req, res) => {
 export const getHospitalAnalytics = async (req, res) => {
     try {
         const claims = await Claim.find({ hospitalId: req.user._id });
-        const patients = await User.find({ role: 'PATIENT', 'patientDetails.registeredByHospital': req.user._id });
+        const patients = await User.find({ role: 'PATIENT', 'patientDetails.registeredByHospitals': req.user._id });
 
         // Calculate Authentic Monthly Admissions cleanly trailing 5 months
         const monthlyAdmissions = [];
@@ -702,7 +755,7 @@ export const uploadPatientDocument = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Missing document parameters or file' });
         }
 
-        const patient = await User.findOne({ _id: patientId, role: 'PATIENT', 'patientDetails.registeredByHospital': req.user._id });
+        const patient = await User.findOne({ _id: patientId, role: 'PATIENT', 'patientDetails.registeredByHospitals': req.user._id });
         if (!patient) return res.status(404).json({ success: false, message: 'Patient not found' });
 
         // Build the public URL for the uploaded file
