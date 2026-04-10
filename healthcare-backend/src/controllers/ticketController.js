@@ -14,8 +14,12 @@ export const createTicket = async (req, res) => {
         // Dynamically resolve targetId if patient
         let targetId = explicitTargetId || null;
         if (raisedByRole === 'PATIENT' && !targetId && req.user.patientDetails) {
-             if (targetRole === 'HOSPITAL' && req.user.patientDetails.registeredByHospitals?.length > 0) {
-                  targetId = req.user.patientDetails.registeredByHospitals[0];
+             if (targetRole === 'HOSPITAL') {
+                  if (req.user.patientDetails.registeredByHospitals?.length > 0) {
+                      targetId = req.user.patientDetails.registeredByHospitals[0];
+                  } else if (req.user.patientDetails.registeredByHospital) {
+                      targetId = req.user.patientDetails.registeredByHospital;
+                  }
              } else if (targetRole === 'INSURANCE' && req.user.patientDetails.insuranceDetails) {
                   targetId = req.user.patientDetails.insuranceDetails.providerId || null;
              }
