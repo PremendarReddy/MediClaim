@@ -59,11 +59,11 @@ const userSchema = new mongoose.Schema(
                 type: Boolean,
                 default: false
             },
-            // Link to the hospital that created this patient profile
-            registeredByHospital: {
+            // Link to the hospitals that created or linked this patient profile
+            registeredByHospitals: [{
                 type: mongoose.Schema.Types.ObjectId,
                 ref: 'User',
-            },
+            }],
             insuranceDetails: {
                 providerId: {
                     type: mongoose.Schema.Types.ObjectId,

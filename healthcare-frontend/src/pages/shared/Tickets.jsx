@@ -5,17 +5,33 @@ import { toast } from "react-toastify";
 
 export default function Tickets({ role }) {
   const [tickets, setTickets] = useState([]);
+  const [hospitals, setHospitals] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const [form, setForm] = useState({
     subject: "",
     message: "",
-    targetRole: "INSURANCE"
+    targetRole: "INSURANCE",
+    targetId: ""
   });
 
   useEffect(() => {
     fetchTickets();
+    if (role === 'patient') {
+      fetchHospitals();
+    }
   }, [role]);
+
+  const fetchHospitals = async () => {
+    try {
+      const response = await api.get('/auth/profile');
+      if (response.data.success && response.data.data.patientDetails?.registeredByHospitals) {
+         setHospitals(response.data.data.patientDetails.registeredByHospitals);
+      }
+    } catch (error) {
+      console.error("Failed to load connected hospitals", error);
+    }
+  };
 
   const fetchTickets = async () => {
     try {
@@ -38,16 +54,22 @@ export default function Tickets({ role }) {
     e.preventDefault();
     if (!form.subject.trim() || !form.message.trim()) return;
 
+    if (form.targetRole === 'HOSPITAL' && !form.targetId && hospitals.length > 0) {
+         toast.error("Please select a target hospital.");
+         return;
+    }
+
     try {
       const response = await api.post('/tickets', {
         subject: form.subject,
         message: form.message,
         raisedByRole: role.toUpperCase(),
         targetRole: form.targetRole,
+        targetId: form.targetId || undefined
       });
       if (response.data.success) {
         toast.success("Support ticket submitted.");
-        setForm({ subject: "", message: "" });
+        setForm({ subject: "", message: "", targetRole: "INSURANCE", targetId: "" });
         fetchTickets();
       }
     } catch (error) {
@@ -90,13 +112,27 @@ export default function Tickets({ role }) {
             
             <select
               value={form.targetRole}
-              onChange={(e) => setForm({ ...form, targetRole: e.target.value })}
+              onChange={(e) => setForm({ ...form, targetRole: e.target.value, targetId: "" })}
               className="w-full border rounded-lg px-3 py-2 font-medium"
               required
             >
               <option value="INSURANCE">Route To: Insurance Provider</option>
-              <option value="HOSPITAL">Route To: My Connected Hospital</option>
+              <option value="HOSPITAL">Route To: My Connected Hospitals</option>
             </select>
+
+            {form.targetRole === 'HOSPITAL' && hospitals.length > 0 && (
+              <select
+                value={form.targetId}
+                onChange={(e) => setForm({ ...form, targetId: e.target.value })}
+                className="w-full border bg-slate-50 rounded-lg px-3 py-2 font-medium"
+                required
+              >
+                <option value="">Select Target Hospital</option>
+                {hospitals.map(h => (
+                   <option key={h._id} value={h._id}>{h.name}</option>
+                ))}
+              </select>
+            )}
 
             <textarea
               placeholder="Describe your issue"
