@@ -155,8 +155,18 @@ export const getUserProfile = async (req, res) => {
     try {
         const user = await User.findById(req.user._id)
             .select('-password')
-            .populate('patientDetails.registeredByHospitals', 'name email hospitalDetails');
+            .populate('patientDetails.registeredByHospitals', 'name email hospitalDetails')
+            .populate('patientDetails.registeredByHospital', 'name email hospitalDetails');
         if (user) {
+            // Backwards compatibility layer for deployed
+            if (user.patientDetails) {
+                if (!user.patientDetails.registeredByHospitals) {
+                    user.patientDetails.registeredByHospitals = [];
+                }
+                if (user.patientDetails.registeredByHospital && !user.patientDetails.registeredByHospitals.some(h => String(h._id) === String(user.patientDetails.registeredByHospital._id))) {
+                    user.patientDetails.registeredByHospitals.push(user.patientDetails.registeredByHospital);
+                }
+            }
             res.json({ success: true, data: user });
         } else {
             res.status(404).json({ success: false, message: 'User not found' });

@@ -27,7 +27,9 @@ export const sendPatientOTP = async (req, res) => {
                 return res.status(400).json({ success: false, message: 'A non-patient user with this email already exists.' });
             }
             const hospitals = userExists.patientDetails?.registeredByHospitals || [];
-            if (hospitals.some(id => id.toString() === req.user._id.toString())) {
+            const oldHospital = userExists.patientDetails?.registeredByHospital;
+            if (hospitals.some(id => id.toString() === req.user._id.toString()) || 
+                (oldHospital && oldHospital.toString() === req.user._id.toString())) {
                  return res.status(400).json({ success: false, message: 'Patient is already registered with your hospital.' });
             }
         }
@@ -120,15 +122,24 @@ export const registerPatient = async (req, res) => {
                 return res.status(400).json({ success: false, message: 'A non-patient user with this email already exists.' });
             }
 
-            // Ensure field is an array (migration safety)
             const hospitals = userExists.patientDetails.registeredByHospitals || [];
+
+            // Deployed DB back-compatibility: capture the old single-hospital string before replacing it if it exists
+            const oldHospital = userExists.patientDetails.registeredByHospital;
+            let newHospitals = [...hospitals];
             
-            if (hospitals.some(id => id.toString() === req.user._id.toString())) {
-                return res.status(400).json({ success: false, message: 'Patient is already registered with your hospital.' });
+            // Add the old one to the array natively to self-migrate them on their next action
+            if (oldHospital && !newHospitals.some(id => id.toString() === oldHospital.toString())) {
+                newHospitals.push(oldHospital);
             }
 
-            // Add the new hospital
-            userExists.patientDetails.registeredByHospitals = [...hospitals, req.user._id];
+            // Append the new hospital correctly
+            if (!newHospitals.some(id => id.toString() === req.user._id.toString())) {
+                newHospitals.push(req.user._id);
+            }
+
+            userExists.patientDetails.registeredByHospitals = newHospitals;
+            userExists.patientDetails.registeredByHospital = undefined; // seamlessly clear from legacy schema
 
             // Retain old insurance coverage and limits if the provider and policy match
             let retainedInsuranceDetails = finalInsuranceDetails;
@@ -211,7 +222,10 @@ export const getHospitalPatients = async (req, res) => {
     try {
         const patients = await User.find({
             role: 'PATIENT',
-            'patientDetails.registeredByHospitals': req.user._id
+            $or: [
+                { 'patientDetails.registeredByHospitals': req.user._id },
+                { 'patientDetails.registeredByHospital': req.user._id }
+            ]
         }).select('-password');
 
         res.json({ success: true, count: patients.length, data: patients });
@@ -249,7 +263,10 @@ export const createClaim = async (req, res) => {
         const patient = await User.findOne({
             _id: patientId,
             role: 'PATIENT',
-            'patientDetails.registeredByHospitals': req.user._id
+            $or: [
+                { 'patientDetails.registeredByHospitals': req.user._id },
+                { 'patientDetails.registeredByHospital': req.user._id }
+            ]
         });
 
         if (!patient) {
@@ -416,7 +433,10 @@ export const sendClaimInitiationOTP = async (req, res) => {
         const patient = await User.findOne({
             _id: patientId,
             role: 'PATIENT',
-            'patientDetails.registeredByHospitals': req.user._id
+            $or: [
+                { 'patientDetails.registeredByHospitals': req.user._id },
+                { 'patientDetails.registeredByHospital': req.user._id }
+            ]
         });
 
         if (!patient) {
@@ -709,7 +729,7 @@ export const updatePatientDetails = async (req, res) => {
 export const getHospitalAnalytics = async (req, res) => {
     try {
         const claims = await Claim.find({ hospitalId: req.user._id });
-        const patients = await User.find({ role: 'PATIENT', 'patientDetails.registeredByHospitals': req.user._id });
+        const patients = await User.find({ role: 'PATIENT', $or: [{ 'patientDetails.registeredByHospitals': req.user._id }, { 'patientDetails.registeredByHospital': req.user._id }] });
 
         // Calculate Authentic Monthly Admissions cleanly trailing 5 months
         const monthlyAdmissions = [];
@@ -761,7 +781,7 @@ export const uploadPatientDocument = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Missing document parameters or file' });
         }
 
-        const patient = await User.findOne({ _id: patientId, role: 'PATIENT', 'patientDetails.registeredByHospitals': req.user._id });
+        const patient = await User.findOne({ _id: patientId, role: 'PATIENT', $or: [{ 'patientDetails.registeredByHospitals': req.user._id }, { 'patientDetails.registeredByHospital': req.user._id }] });
         if (!patient) return res.status(404).json({ success: false, message: 'Patient not found' });
 
         // Build the public URL for the uploaded file
